@@ -88,7 +88,14 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 #pgB select{font:inherit;padding:6px;border-radius:8px;border:1px solid var(--mut);background:var(--bg);color:var(--fg)}
 #pgB .m{color:var(--mut);font-size:13px}
 #pgB .warn{color:#c0392b;font-weight:600}
-</style></head><body>
+#pgB .leaflet-container{font:inherit}
+#pgB .mapbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:-4px 0 12px;font-size:13px;color:var(--mut)}
+#pgB .mapbar label{display:flex;gap:4px;align-items:center}
+#pgB .tkpin{background:var(--acc);color:#fff;border-radius:6px;padding:1px 6px;font-weight:700;white-space:nowrap;font-size:12px}
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+</head><body>
 <nav class="tabs" role="tablist">
   <button id="tabA" role="tab" aria-selected="true" data-tab="countdown">高鐵列車距離</button>
   <button id="tabB" role="tab" aria-selected="false" data-tab="locate">高鐵里程定位</button>
@@ -130,6 +137,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <section id="pgB" class="page"><div class="inner">
 
 
+<div id="map"><div class="m" style="padding:14px">地圖載入中…（需連網）</div></div>
+<div class="mapbar"><label><input type="checkbox" id="follow" checked style="width:auto"> 地圖跟隨目前位置</label><span>點地圖任一處可查詢該點最近里程</span></div>
 <div class="card">
   <div class="m">最近里程</div>
   <div class="big" id="tk">—</div>
@@ -1019,8 +1028,9 @@ function fmt(ch){
   return 'TK'+sign+(s<0?String(k).padStart(3,'0'):String(k))+'+'+String(m).padStart(3,'0');
 }
 let last=null;
-function show(lat,lon,acc){
+function show(lat,lon,acc,fromMap){
   const r=locate(lat,lon);last=Math.round(r.ch);
+  if(window._thsrMap)window._thsrMap(lat,lon,acc,r,fromMap);
   document.getElementById('tk').textContent=fmt(r.ch);
   document.getElementById('num').textContent='數值 '+last+'';
   const o=document.getElementById('off');
@@ -1078,6 +1088,58 @@ document.getElementById('tocd').onclick=()=>{
   k.dispatchEvent(new Event('input'));            // 觸發列車距離頁重算並存檔
   document.dispatchEvent(new CustomEvent('thsr:tab',{detail:'countdown'}));
 };
+
+/* ===== 地圖（Leaflet + OpenStreetMap／Esri 衛星）：高鐵線形、目前位置、線上最近里程點 =====
+ * 需連網載入圖磚；離線時其餘功能仍可用。TM2→WGS84 為反算（與 toTM2 互逆）。 */
+function fromTM2(x,y){
+  const a=6378137,f=1/298.257222101,e2=2*f-f*f,ep2=e2/(1-e2),k0=0.9999;
+  const M=y/k0,mu=M/(a*(1-e2/4-3*e2**2/64-5*e2**3/256));
+  const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  const p1=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1**2/16-55*e1**4/32)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu);
+  const N1=a/Math.sqrt(1-e2*Math.sin(p1)**2),T1=Math.tan(p1)**2,C1=ep2*Math.cos(p1)**2;
+  const R1=a*(1-e2)/Math.pow(1-e2*Math.sin(p1)**2,1.5),D=(x-250000)/(N1*k0);
+  const lat=p1-(N1*Math.tan(p1)/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*D**4/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*D**6/720);
+  const lon=(D-(1+2*T1+C1)*D**3/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*D**5/120)/Math.cos(p1);
+  return [lat*180/Math.PI,121+lon*180/Math.PI];
+}
+(function(){
+  const box=document.getElementById('map');
+  if(typeof L==='undefined'){box.innerHTML='<div class="m" style="padding:14px">地圖元件無法載入（請確認網路連線）。定位與里程計算仍可使用。</div>';return;}
+  box.innerHTML='';
+  const map=L.map(box,{zoomControl:true}).setView([24.7,121.0],9);
+  const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
+  const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri World Imagery'});
+  osm.addTo(map); L.control.layers({'街道':osm,'衛星':sat},null,{position:'topright'}).addTo(map);
+  // 高鐵線形（約 1,800 點）
+  const pts=LINE.map(p=>fromTM2(p[0],p[1]));
+  const line=L.polyline(pts,{color:'#d34600',weight:4,opacity:.85}).addTo(map);
+  map.fitBounds(line.getBounds());
+  let me=null,acc=null,snap=null,first=true;
+  const pin=L.divIcon({className:'',html:'<div style="width:14px;height:14px;border-radius:50%;background:#1a73e8;border:2px solid #fff;box-shadow:0 0 4px #0008"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+  window._thsrMap=function(lat,lon,accM,r,fromMap){
+    const ll=[lat,lon], sp=fromTM2(r.fx,r.fy);
+    if(!me){me=L.marker(ll,{icon:pin}).addTo(map);} else me.setLatLng(ll);
+    if(acc){map.removeLayer(acc);acc=null;}
+    if(accM!=null)acc=L.circle(ll,{radius:accM,color:'#1a73e8',weight:1,fillOpacity:.1}).addTo(map);
+    const lab='<span class="tkpin">'+fmt(r.ch)+'</span>';
+    if(!snap){snap=L.circleMarker(sp,{radius:6,color:'#fff',weight:2,fillColor:'#d34600',fillOpacity:1}).addTo(map);}
+    else snap.setLatLng(sp);
+    snap.bindTooltip(lab,{permanent:true,direction:'top',offset:[0,-6]}).openTooltip();
+    if(fromMap||first||document.getElementById('follow').checked){
+      map.setView(ll,Math.max(map.getZoom(),first?16:15)); first=false;
+    }
+  };
+  map.on('click',e=>{
+    document.getElementById('manual').value=e.latlng.lat.toFixed(6)+','+e.latlng.lng.toFixed(6);
+    show(e.latlng.lat,e.latlng.lng,null,true);
+    document.getElementById('fillmsg').textContent='已由地圖選取座標';
+  });
+  // 分頁切換顯示後需重算尺寸
+  const fix=()=>setTimeout(()=>map.invalidateSize(),50);
+  document.getElementById('tabB').addEventListener('click',fix);
+  document.addEventListener('thsr:tab',fix);
+  if(location.hash==='#locate')fix();
+})();
 
 })();
 </script>
