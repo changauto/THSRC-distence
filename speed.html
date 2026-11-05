@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>高鐵行車速度記錄器</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --panel: #ffffff; --ink: #111827; --sub: #6b7280;
+    --line: #d1d5db; --accent: #e8590c; --ok: #15803d; --bad: #b91c1c;
+    --grid: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1216; --panel: #181c22; --ink: #f3f4f6; --sub: #9ca3af;
+      --line: #2f3640; --accent: #ff8a3d; --ok: #4ade80; --bad: #f87171;
+      --grid: #232a33;
+    }
+  }
+  :root[data-theme="dark"] {
+      --bg: #0f1216; --panel: #181c22; --ink: #f3f4f6; --sub: #9ca3af;
+      --line: #2f3640; --accent: #ff8a3d; --ok: #4ade80; --bad: #f87171;
+      --grid: #232a33;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif; }
+  body { padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 17px; font-weight: 600; margin: 4px 0 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .speed { display: flex; align-items: baseline; gap: 8px; }
+  .speed .v { font-size: 88px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -2px; }
+  .speed .u { font-size: 18px; color: var(--sub); }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 13px; color: var(--sub); }
+  .meta b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--sub); margin-right: 6px; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+  canvas { width: 100%; height: 200px; display: block; }
+  .btns { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; }
+  button { font: inherit; font-size: 15px; padding: 13px 8px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); cursor: pointer; }
+  button.main { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.main.on { background: var(--bad); border-color: var(--bad); }
+  button:disabled { opacity: .4; cursor: default; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .log { max-height: 180px; overflow: auto; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .log table { width: 100%; border-collapse: collapse; }
+  .log td, .log th { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--grid); }
+  .log th { position: sticky; top: 0; background: var(--panel); color: var(--sub); font-weight: 500; }
+  .log td:first-child, .log th:first-child { text-align: left; }
+  .note { font-size: 12px; color: var(--sub); line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<h1>高鐵行車速度記錄器</h1>
+
+<div class="panel">
+  <div class="speed"><span class="v" id="speed">—</span><span class="u">km/h</span></div>
+  <div class="meta">
+    <span><span class="dot" id="dot"></span><span id="status">尚未啟動</span></span>
+    <span>GPS 精度 <b id="acc">—</b></span>
+    <span>已記錄 <b id="count">0</b> 筆</span>
+    <span>經過 <b id="elapsed">00:00:00</b></span>
+    <span>最高 <b id="vmax">—</b></span>
+  </div>
+</div>
+
+<div class="panel">
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="btns" style="margin-bottom:12px">
+  <button class="main" id="toggle">開始記錄</button>
+  <button id="export" disabled>匯出 CSV</button>
+  <button id="clear" disabled>清除</button>
+</div>
+<div class="note" id="msg" style="margin:-4px 0 12px;min-height:18px"></div>
+
+<div class="panel log">
+  <table>
+    <thead><tr><th>時間</th><th>經過 (s)</th><th>速度 (km/h)</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+
+<p class="note">
+  每 10 秒記錄一筆瞬時速度（取該時點最新的 GPS 都卜勒速度）；若超過 3 秒沒有新的定位，該筆速度留空，代表訊號中斷（如隧道段）。
+  記錄期間請保持此頁面在前景、螢幕不要鎖定（程式會嘗試保持螢幕常亮）。
+  記錄會自動暫存在本機瀏覽器，不小心重新整理後仍會保留，但清除瀏覽資料會消失，請於每趟結束後匯出 CSV。
+</p>
+
+<script>
+/* ===== 使用方法 =====
+ * 1. 以 HTTPS 網址開啟（GitHub Pages 即可），允許瀏覽器「位置」權限。
+ * 2. 按「開始記錄」，每 10 秒記錄一筆；結束後按「停止記錄」→「匯出 CSV」。
+ * 3. 匯出：優先直接下載檔案；若瀏覽器不允許下載，會改為複製 CSV 文字到剪貼簿。
+ */
+(function () {
+  "use strict";
+
+  const INTERVAL_MS = 10000;   // 記錄間隔：10 秒
+  const STALE_MS    = 3000;    // 超過此時間沒有新定位，視為訊號中斷
+  const STORE_KEY   = "thsr_speed_rows_v1";
+
+  const $ = id => document.getElementById(id);
+  const el = {
+    speed: $("speed"), dot: $("dot"), status: $("status"), acc: $("acc"),
+    count: $("count"), elapsed: $("elapsed"), vmax: $("vmax"),
+    toggle: $("toggle"), exp: $("export"), clear: $("clear"),
+    rows: $("rows"), canvas: $("chart"), msg: $("msg")
+  };
+
+  let watchId = null, timer = null, wakeLock = null;
+  let recording = false, startTs = 0;
+  let latest = null;   // {t, kmh, acc}
+  let prev = null;     // 前一筆定位，供 coords.speed 為 null 時以位置差分備援
+  let rows = [];       // {t: Date, sec, kmh|null}
+
+  const pad = n => String(n).padStart(2, "0");
+  const fmtTime = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const fmtHMS = s => `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(Math.floor(s%60))}`;
+  const say = (t) => { el.msg.textContent = t || ""; };
+
+  // 暫存：每筆寫入 localStorage，重新整理後可還原（失敗時忽略）
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(rows.map(r => [r.t.getTime(), r.sec, r.kmh]))); } catch (_) {}
+  }
+  function load() {
+    try {
+      const a = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+      rows = a.map(([t, sec, kmh]) => ({t: new Date(t), sec, kmh}));
+    } catch (_) { rows = []; }
+  }
+
+  // 兩點間距離 (m)，haversine
+  function dist(a, b) {
+    const R = 6371000, r = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+    const h = Math.sin(dLat/2)**2 + Math.cos(a.lat*r) * Math.cos(b.lat*r) * Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  function onPos(p) {
+    const c = p.coords, t = Date.now();
+    let kmh = null;
+    if (c.speed != null && !isNaN(c.speed)) {
+      kmh = c.speed * 3.6;                       // 都卜勒速度 m/s → km/h
+    } else if (prev) {                           // 備援：位置差分
+      const dt = (t - prev.t) / 1000;
+      if (dt > 0 && dt < 5) kmh = dist(prev, {lat: c.latitude, lon: c.longitude}) / dt * 3.6;
+    }
+    prev = {t, lat: c.latitude, lon: c.longitude};
+    if (kmh == null) return;
+    latest = {t, kmh, acc: c.accuracy};
+    el.acc.textContent = c.accuracy != null ? `±${Math.round(c.accuracy)} m` : "—";
+    render();
+  }
+
+  function onErr(e) {
+    const msg = {1: "定位權限被拒絕（請於瀏覽器設定允許位置）", 2: "無法取得定位", 3: "定位逾時"}[e.code] || "定位錯誤";
+    setStatus(msg, "bad");
+  }
+
+  function setStatus(text, cls) {
+    el.status.textContent = text;
+    el.dot.className = "dot" + (cls ? " " + cls : "");
+  }
+
+  // 目前是否有有效定位
+  const fresh = () => latest && (Date.now() - latest.t) <= STALE_MS;
+
+  function render() {
+    if (recording || latest) {
+      if (fresh()) {
+        el.speed.textContent = Math.round(latest.kmh);
+        setStatus(recording ? "記錄中" : "定位中", "ok");
+      } else {
+        el.speed.textContent = "—";
+        if (watchId != null) setStatus("訊號中斷", "bad");
+      }
+    }
+    if (recording) el.elapsed.textContent = fmtHMS((Date.now() - startTs) / 1000);
+  }
+
+  function tick() {
+    const now = Date.now();
+    const kmh = fresh() ? latest.kmh : null;
+    rows.push({t: new Date(now), sec: Math.round((now - startTs) / 1000), kmh});
+    addRow(rows[rows.length - 1]);
+    save();
+    updateStats();
+    drawChart();
+  }
+
+  function addRow(r) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${fmtTime(r.t).slice(11)}</td><td>${r.sec}</td><td>${r.kmh == null ? "—" : r.kmh.toFixed(1)}</td>`;
+    el.rows.appendChild(tr);
+    el.rows.parentNode.parentNode.scrollTop = 1e9;
+  }
+
+  function updateStats() {
+    el.count.textContent = rows.length;
+    const v = rows.filter(r => r.kmh != null).map(r => r.kmh);
+    el.vmax.textContent = v.length ? Math.round(Math.max(...v)) + " km/h" : "—";
+    el.exp.disabled = el.clear.disabled = rows.length === 0;
+  }
+
+  // 速度–時間曲線；訊號中斷處斷線
+  function drawChart() {
+    const cv = el.canvas, dpr = window.devicePixelRatio || 1;
+    const W = cv.clientWidth, H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const g = cv.getContext("2d");
+    g.scale(dpr, dpr);
+    const css = getComputedStyle(document.documentElement);
+    const ink = css.getPropertyValue("--sub").trim(), grid = css.getPropertyValue("--grid").trim(), acc = css.getPropertyValue("--accent").trim();
+    const L = 34, R = 8, T = 8, B = 20, w = W - L - R, h = H - T - B;
+
+    const vmax = Math.max(100, Math.ceil(Math.max(0, ...rows.map(r => r.kmh || 0)) / 50) * 50);
+    const tmax = Math.max(60, rows.length ? rows[rows.length - 1].sec : 60);
+    const X = s => L + s / tmax * w, Y = v => T + h - v / vmax * h;
+
+    g.font = "11px system-ui, sans-serif"; g.fillStyle = ink; g.strokeStyle = grid; g.lineWidth = 1;
+    g.textAlign = "right"; g.textBaseline = "middle";
+    for (let v = 0; v <= vmax; v += 50) {
+      g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(W - R, Y(v)); g.stroke();
+      g.fillText(v, L - 5, Y(v));
+    }
+    g.textAlign = "center"; g.textBaseline = "top";
+    const step = tmax > 1800 ? 600 : tmax > 600 ? 300 : tmax > 180 ? 60 : 30;
+    for (let s = 0; s <= tmax; s += step) g.fillText(s % 60 === 0 ? (s/60) + " min" : s + " s", X(s), H - B + 5);
+
+    g.strokeStyle = acc; g.lineWidth = 2; g.lineJoin = "round";
+    let open = false;
+    g.beginPath();
+    rows.forEach(r => {
+      if (r.kmh == null) { open = false; return; }
+      if (!open) { g.moveTo(X(r.sec), Y(r.kmh)); open = true; } else g.lineTo(X(r.sec), Y(r.kmh));
+    });
+    g.stroke();
+    g.fillStyle = acc;
+    rows.forEach(r => { if (r.kmh != null) { g.beginPath(); g.arc(X(r.sec), Y(r.kmh), 2.5, 0, 7); g.fill(); } });
+  }
+
+  // 螢幕常亮（Wake Lock）：回到前景時重新申請；不支援的瀏覽器會提示
+  async function lockScreen() {
+    try {
+      if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+      else say("此瀏覽器不支援螢幕常亮，請自行調長螢幕自動關閉時間。");
+    } catch (_) { say("無法啟用螢幕常亮，請自行調長螢幕自動關閉時間。"); }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && recording) lockScreen();
+  });
+
+  function start() {
+    if (!("geolocation" in navigator)) { setStatus("此瀏覽器不支援定位", "bad"); return; }
+    say("");
+    startTs = Date.now();
+    recording = true;
+    el.toggle.textContent = "停止記錄"; el.toggle.classList.add("on");
+    if (watchId == null)
+      watchId = navigator.geolocation.watchPosition(onPos, onErr,
+        {enableHighAccuracy: true, maximumAge: 0, timeout: 15000});
+    lockScreen();
+    tick();                                   // t = 0 的第一筆
+    timer = setInterval(tick, INTERVAL_MS);
+  }
+
+  function stop() {
+    recording = false;
+    clearInterval(timer); timer = null;
+    if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    el.toggle.textContent = "開始記錄"; el.toggle.classList.remove("on");
+    setStatus("已停止", ""); el.speed.textContent = "—";
+  }
+
+  // 兩段式確認：第一次按下改變按鈕文字，3 秒內再按一次才執行（取代 confirm/alert）
+  function armed(btn, armedText, action) {
+    const orig = btn.textContent;
+    if (btn.dataset.armed) { clearTimeout(+btn.dataset.armed); delete btn.dataset.armed; btn.textContent = orig; action(); return; }
+    btn.textContent = armedText;
+    btn.dataset.armed = setTimeout(() => { delete btn.dataset.armed; btn.textContent = orig; }, 3000);
+  }
+  el.toggle.onclick = () => {
+    if (recording) return stop();
+    if (!rows.length) return start();
+    // 已有舊資料：再按一次才清除舊資料並重新開始
+    const orig = "開始記錄";
+    if (el.toggle.dataset.armed) { clearTimeout(+el.toggle.dataset.armed); delete el.toggle.dataset.armed; el.toggle.textContent = orig; clearAll(); start(); }
+    else {
+      el.toggle.textContent = "再按一次：清除舊資料並開始";
+      el.toggle.dataset.armed = setTimeout(() => { delete el.toggle.dataset.armed; el.toggle.textContent = orig; }, 3000);
+    }
+  };
+
+  function clearAll() {
+    rows = []; el.rows.innerHTML = ""; el.elapsed.textContent = "00:00:00";
+    save(); updateStats(); drawChart();
+  }
+  el.clear.onclick = () => {
+    if (recording) { setStatus("請先停止記錄再清除", "bad"); return; }
+    armed(el.clear, "再按一次確認清除", clearAll);
+  };
+
+  // 匯出 CSV（加 BOM 讓 Excel 以 UTF-8 開啟；訊號中斷的速度欄留空）
+  el.exp.onclick = async () => {
+    const lines = ["時間,經過秒數,速度_kmh"];
+    rows.forEach(r => lines.push(`${fmtTime(r.t)},${r.sec},${r.kmh == null ? "" : r.kmh.toFixed(1)}`));
+    const csv = lines.join("\r\n");
+    const d = rows[0].t;
+    const name = `thsr_speed_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.csv`;
+    try {                                     // 1) 直接下載檔案
+      const blob = new Blob(["﻿" + csv], {type: "text/csv;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      say("已觸發下載：" + name + "（若找不到檔案，請看瀏覽器的下載清單）");
+    } catch (e) {                             // 2) 備援：複製到剪貼簿
+      try { await navigator.clipboard.writeText(csv); say("無法下載，已將 CSV 文字複製到剪貼簿，可貼到記事本後存成 .csv。"); }
+      catch (_) { say("匯出失敗，請改用其他瀏覽器（Chrome／Safari）。"); }
+    }
+  };
+
+  load();                                     // 還原上次暫存的記錄
+  rows.forEach(addRow);
+  updateStats();
+  setInterval(render, 1000);                  // 每秒更新畫面與訊號狀態
+  window.addEventListener("resize", drawChart);
+  drawChart();
+})();
+</script>
+</body>
+</html>
