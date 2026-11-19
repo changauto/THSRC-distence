@@ -1,1 +1,29 @@
+# 每天自動從 TDX 抓高鐵時刻表，存到 tdx/ 資料夾並 commit，GitHub Pages 會跟著更新。
+# 金鑰放在 repo 的 Settings → Secrets and variables → Actions：TDX_CLIENT_ID、TDX_CLIENT_SECRET
+name: TDX 高鐵時刻表
 
+on:
+  schedule:
+    - cron: "17 16 * * *"   # UTC 16:17 = 台灣 00:17
+    - cron: "17 4 * * *"    # UTC 04:17 = 台灣 12:17（補抓臨時加班車）
+  workflow_dispatch:         # 可在 Actions 頁面手動按 Run workflow
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 抓取時刻表
+        env:
+          TDX_CLIENT_ID: ${{ secrets.TDX_CLIENT_ID }}
+          TDX_CLIENT_SECRET: ${{ secrets.TDX_CLIENT_SECRET }}
+        run: python3 fetch_thsr_tdx.py
+      - name: 有變動才 commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A tdx
+          git diff --cached --quiet || (git commit -m "更新 TDX 高鐵時刻表" && git push)
