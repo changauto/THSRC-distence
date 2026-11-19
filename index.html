@@ -88,14 +88,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 #pgB select{font:inherit;padding:6px;border-radius:8px;border:1px solid var(--mut);background:var(--bg);color:var(--fg)}
 #pgB .m{color:var(--mut);font-size:13px}
 #pgB .warn{color:#c0392b;font-weight:600}
-#pgB .leaflet-container{font:inherit}
-#pgB .mapbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:-4px 0 12px;font-size:13px;color:var(--mut)}
-#pgB .mapbar label{display:flex;gap:4px;align-items:center}
-#pgB .tkpin{background:var(--acc);color:#fff;border-radius:6px;padding:1px 6px;font-weight:700;white-space:nowrap;font-size:12px}
-</style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-</head><body>
+</style></head><body>
 <nav class="tabs" role="tablist">
   <button id="tabA" role="tab" aria-selected="true" data-tab="countdown">高鐵列車距離</button>
   <button id="tabB" role="tab" aria-selected="false" data-tab="locate">高鐵里程定位</button>
@@ -137,8 +130,6 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <section id="pgB" class="page"><div class="inner">
 
 
-<div id="map"><div class="m" style="padding:14px">地圖載入中…（需連網）</div></div>
-<div class="mapbar"><label><input type="checkbox" id="follow" checked style="width:auto"> 地圖跟隨目前位置</label><span>點地圖任一處可查詢該點最近里程</span></div>
 <div class="card">
   <div class="m">最近里程</div>
   <div class="big" id="tk">—</div>
@@ -671,6 +662,12 @@ const NBE = `
 /* ---- 停站時間 (分鐘)：台北、台中 2 分，其餘 1.5 分；起訖站不計 ----
  * 假設中間停靠站的時刻表時間為「發車時間」，故到站時間 = 時刻表時間 - 停站時間。
  * 若實際為到站時間，將 TT_IS_DEPARTURE 改為 false（則發車 = 時刻表時間 + 停站時間）。 */
+/* ---- 北上實測停車點 (km)：取自 2026-11-05 苗栗→新竹 GPS 紀錄（停止時的 TK 里程）。
+ * 與站區中點差：苗栗 -0.075 km、新竹 -0.153 km；用中點會讓進站最後約 40 秒的預估偏差達 20~35 秒。
+ * 僅北上、僅此兩站有實測；其餘站與南下仍用站區中點。單次量測，之後有新紀錄再修正。 */
+const STOP_KM_NB = {MIL:104.735, HSC:72.044};
+const stopKm = (code, dir) => (dir==='N' && STOP_KM_NB[code]!=null) ? STOP_KM_NB[code] : MID[code];
+
 const DWELL = {TPE:2, TAC:2};
 const DWELL_DEFAULT = 1.5;   // 苗栗實測停好到重新開車約 1 分 30 秒；其他站尚未實測
 const TT_IS_DEPARTURE = true;
@@ -685,7 +682,7 @@ function parseRows(txt, order, dir, isElec){
       let m = (+c.slice(0,2))*60 + (+c.slice(2)) + add;
       if(m < prev){ add += 1440; m += 1440; } // 跨午夜
       prev = m;
-      stops.push({code:order[i], t:m, km:MID[order[i]]});
+      stops.push({code:order[i], t:m, km:stopKm(order[i], dir)});
     });
     // 起點：僅有發車；終點：僅有到站；中間站：到站與發車相差停站時間
     stops.forEach((s,i)=>{
@@ -705,14 +702,35 @@ const TRAINS = {
   NE: parseRows(NBE, N_ORDER, 'N', true),
 };
 
+/* ---- TDX 每日時刻表（GitHub Actions 每天抓好放在 tdx/YYYY-MM-DD.json，與本頁同資料夾）----
+ * 找得到當天檔案就改用 TDX 班表（已含加班車、疏運班次）；找不到（離線、claude.ai 預覽、Actions 失敗）
+ * 就沿用上方內建 PDF 班表。只在日型選「依今日」時使用。 */
+const TDX_DAY = {};     // 'YYYY-MM-DD' → {S:[...], N:[...], updated}
+let TDX_LOADED = '';    // 已載入的基準日，跨午夜時重新載入
+const ymd = dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+function loadTDX(){
+  const t = new Date(); TDX_LOADED = ymd(t);
+  [-1,0,1].forEach(d=>{
+    const key = ymd(new Date(t.getFullYear(), t.getMonth(), t.getDate()+d));
+    if(TDX_DAY[key]) return;
+    fetch(`tdx/${key}.json`, {cache:'no-cache'}).then(r=>r.ok?r.json():null).then(j=>{
+      if(!j || !j.S || !j.N) return;
+      TDX_DAY[key] = {S:parseRows(j.S.join('\n'), S_ORDER, 'S'), N:parseRows(j.N.join('\n'), N_ORDER, 'N'), updated:j.updated};
+    }).catch(()=>{});
+  });
+}
+loadTDX();
+
 /* ---- 站間運動模型（依 2026-10-14 苗栗→新竹 北上實測錄影擬合）----
  * 每個站間區段：自 p 站發車起加速 → 巡航(通過站區降速) → 減速進 q 站，並於 q.arr 停止。
  * 巡航速度 vc 由「總時間 = q.arr - p.dep」反解。曲線來源僅一班車一個區間，其餘為外插，詳見註解。 */
 const PASS_SPEED_KMH = 225;    // 通過(不停)站區速度，由苗栗站區約 500 m、通過約 8 秒估得，非官方數據
-/* 加速度 a(v)：km/h → m/s²。0~250 km/h 取自實測；250 以上為外插(實測最高 251 km/h) */
-const ACC_PTS = [[0,0.62],[70,0.60],[100,0.45],[130,0.40],[160,0.34],[190,0.30],[225,0.26],[250,0.25],[260,0.20],[275,0.12],[300,0.05]];
-/* 減速度 d(v)：km/h → m/s²。25~184 取自實測；184 以上因 GPS 中斷為線性補值，不確定 */
-const DEC_PTS = [[25,0.33],[57,0.55],[110,0.55],[140,0.55],[154,0.30],[184,0.28],[185,0.58],[300,0.58]];
+/* 加速度 a(v)：km/h → m/s²。0~250 km/h 為兩次實測平均（2026-10-14 錄影、2026-11-05 GPS 紀錄）；
+ * 250 以上為外插（兩次實測最高 251、261 km/h，該區間列車為巡航而非加速，無法定出高速加速度）。 */
+const ACC_PTS = [[0,0.71],[45,0.629],[66,0.561],[70,0.538],[88,0.395],[100,0.4],[105,0.411],[130,0.41],[155,0.36],[160,0.346],[190,0.27],[225,0.255],[250,0.235],[260,0.20],[275,0.12],[300,0.05]];
+/* 減速度 d(v)：km/h → m/s²。25~184 為兩次實測平均；184 以上原為 GPS 中斷的線性補值，
+ * 改採 2026-11-05 實測（最高 261 km/h）；261 以上為外插。 */
+const DEC_PTS = [[25,0.29],[40,0.53],[57,0.58],[90,0.575],[110,0.565],[130,0.525],[140,0.516],[154,0.38],[165,0.37],[184,0.33],[215,0.30],[235,0.45],[260,0.43],[300,0.43]];
 const CREEP_KMH = 25, CREEP_SEC = 15, FINAL_SEC = 21;   // 進站最後：以 25 km/h 爬行 15 秒，再 21 秒煞停
 const V_TOP = 295;                                       // 模型最高速度 km/h
 function interpPts(pts, x){
@@ -833,17 +851,18 @@ function dayInfo(sel, d){
   const t = new Date(); t.setHours(0,0,0,0);
   if(sel>=1 && sel<=7) return {wk:weekdayOf(sel,d), elec:false, dom:0};
   const dt = sel>=11 ? new Date(2026,10,27+(sel-11)+d) : new Date(t.getFullYear(),t.getMonth(),t.getDate()+d);
-  return {wk: dt.getDay()||7, elec:isElecDate(dt), dom:dt.getDate()};
+  return {wk: dt.getDay()||7, elec:isElecDate(dt), dom:dt.getDate(), date:ymd(dt)};
 }
 function collect(dir, km, nowMs, sel, adjSec=0){
   const d0 = new Date(nowMs); d0.setHours(0,0,0,0);
   const ev = [];
   for(const d of [-1,0,1]){
     const info = dayInfo(sel, d);
-    const list = TRAINS[dir + (info.elec?'E':'')];
+    const tdx = sel===0 ? TDX_DAY[info.date] : null;         // 有 TDX 當日班表就優先使用
+    const list = tdx ? tdx[dir] : TRAINS[dir + (info.elec?'E':'')];
     const key = info.elec ? info.dom : info.wk;               // 選舉班表比對日期，一般班表比對星期
     for(const tr of list){
-      if(tr.days.length && !tr.days.includes(key)) continue;   // 非當日行駛
+      if(!tdx && tr.days.length && !tr.days.includes(key)) continue;   // 非當日行駛（TDX 為當日實際班次，不需篩選）
       const m = passMinute(tr, km);
       if(m===null) continue;
       ev.push({tr, d, ms: d0.getTime() + d*86400000 + m*60000 + adjSec*1000});
@@ -941,6 +960,7 @@ function dayTag(ev, nowMs){
 function render(){
   const now = Date.now(), nd = new Date(now);
   $clock.textContent = hms(now);
+  if(ymd(nd) !== TDX_LOADED) loadTDX();                       // 跨午夜補載
 
   const meters = parseMileage($km.value);
   if(isNaN(meters)){
@@ -950,7 +970,7 @@ function render(){
   }
   const km = meters/1000;
   const stn = stationAt(km);
-  $label.innerHTML = `<b>${fmtTK(meters)}</b>${stn?`　位於${stn}站區`:''}　<span style="color:var(--sub)">時刻表：${dayInfo(+$day.value,0).elec?'選舉疏運':'一般(2026.02)'}</span>`;
+  $label.innerHTML = `<b>${fmtTK(meters)}</b>${stn?`　位於${stn}站區`:''}　<span style="color:var(--sub)">時刻表：${(+$day.value===0 && TDX_DAY[ymd(nd)]) ? `TDX（${TDX_DAY[ymd(nd)].updated} 更新）` : (dayInfo(+$day.value,0).elec?'選舉疏運':'一般(2026.02)')}</span>`;
 
   const sel = +$day.value;
 
@@ -1028,9 +1048,8 @@ function fmt(ch){
   return 'TK'+sign+(s<0?String(k).padStart(3,'0'):String(k))+'+'+String(m).padStart(3,'0');
 }
 let last=null;
-function show(lat,lon,acc,fromMap){
+function show(lat,lon,acc){
   const r=locate(lat,lon);last=Math.round(r.ch);
-  if(window._thsrMap)window._thsrMap(lat,lon,acc,r,fromMap);
   document.getElementById('tk').textContent=fmt(r.ch);
   document.getElementById('num').textContent='數值 '+last+'';
   const o=document.getElementById('off');
@@ -1088,58 +1107,6 @@ document.getElementById('tocd').onclick=()=>{
   k.dispatchEvent(new Event('input'));            // 觸發列車距離頁重算並存檔
   document.dispatchEvent(new CustomEvent('thsr:tab',{detail:'countdown'}));
 };
-
-/* ===== 地圖（Leaflet + OpenStreetMap／Esri 衛星）：高鐵線形、目前位置、線上最近里程點 =====
- * 需連網載入圖磚；離線時其餘功能仍可用。TM2→WGS84 為反算（與 toTM2 互逆）。 */
-function fromTM2(x,y){
-  const a=6378137,f=1/298.257222101,e2=2*f-f*f,ep2=e2/(1-e2),k0=0.9999;
-  const M=y/k0,mu=M/(a*(1-e2/4-3*e2**2/64-5*e2**3/256));
-  const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
-  const p1=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1**2/16-55*e1**4/32)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu);
-  const N1=a/Math.sqrt(1-e2*Math.sin(p1)**2),T1=Math.tan(p1)**2,C1=ep2*Math.cos(p1)**2;
-  const R1=a*(1-e2)/Math.pow(1-e2*Math.sin(p1)**2,1.5),D=(x-250000)/(N1*k0);
-  const lat=p1-(N1*Math.tan(p1)/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*D**4/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*D**6/720);
-  const lon=(D-(1+2*T1+C1)*D**3/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*D**5/120)/Math.cos(p1);
-  return [lat*180/Math.PI,121+lon*180/Math.PI];
-}
-(function(){
-  const box=document.getElementById('map');
-  if(typeof L==='undefined'){box.innerHTML='<div class="m" style="padding:14px">地圖元件無法載入（請確認網路連線）。定位與里程計算仍可使用。</div>';return;}
-  box.innerHTML='';
-  const map=L.map(box,{zoomControl:true}).setView([24.7,121.0],9);
-  const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
-  const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri World Imagery'});
-  osm.addTo(map); L.control.layers({'街道':osm,'衛星':sat},null,{position:'topright'}).addTo(map);
-  // 高鐵線形（約 1,800 點）
-  const pts=LINE.map(p=>fromTM2(p[0],p[1]));
-  const line=L.polyline(pts,{color:'#d34600',weight:4,opacity:.85}).addTo(map);
-  map.fitBounds(line.getBounds());
-  let me=null,acc=null,snap=null,first=true;
-  const pin=L.divIcon({className:'',html:'<div style="width:14px;height:14px;border-radius:50%;background:#1a73e8;border:2px solid #fff;box-shadow:0 0 4px #0008"></div>',iconSize:[14,14],iconAnchor:[7,7]});
-  window._thsrMap=function(lat,lon,accM,r,fromMap){
-    const ll=[lat,lon], sp=fromTM2(r.fx,r.fy);
-    if(!me){me=L.marker(ll,{icon:pin}).addTo(map);} else me.setLatLng(ll);
-    if(acc){map.removeLayer(acc);acc=null;}
-    if(accM!=null)acc=L.circle(ll,{radius:accM,color:'#1a73e8',weight:1,fillOpacity:.1}).addTo(map);
-    const lab='<span class="tkpin">'+fmt(r.ch)+'</span>';
-    if(!snap){snap=L.circleMarker(sp,{radius:6,color:'#fff',weight:2,fillColor:'#d34600',fillOpacity:1}).addTo(map);}
-    else snap.setLatLng(sp);
-    snap.bindTooltip(lab,{permanent:true,direction:'top',offset:[0,-6]}).openTooltip();
-    if(fromMap||first||document.getElementById('follow').checked){
-      map.setView(ll,Math.max(map.getZoom(),first?16:15)); first=false;
-    }
-  };
-  map.on('click',e=>{
-    document.getElementById('manual').value=e.latlng.lat.toFixed(6)+','+e.latlng.lng.toFixed(6);
-    show(e.latlng.lat,e.latlng.lng,null,true);
-    document.getElementById('fillmsg').textContent='已由地圖選取座標';
-  });
-  // 分頁切換顯示後需重算尺寸
-  const fix=()=>setTimeout(()=>map.invalidateSize(),50);
-  document.getElementById('tabB').addEventListener('click',fix);
-  document.addEventListener('thsr:tab',fix);
-  if(location.hash==='#locate')fix();
-})();
 
 })();
 </script>
