@@ -61,7 +61,11 @@ def http_json(req, tries=4):
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             if e.code != 429 or i == tries - 1:
-                raise
+                try:
+                    body = e.read().decode("utf-8", "replace")[:300]
+                except Exception:
+                    body = ""
+                raise RuntimeError(f"HTTP {e.code} {e.reason}；TDX 回應：{body}") from None
             wait = 5 * 2 ** i
             print(f"TDX 回應 429（太頻繁），{wait} 秒後重試", file=sys.stderr)
             time.sleep(wait)
@@ -115,7 +119,26 @@ def to_row(train):
 
 
 # ---------------- 捷運／輕軌車站時刻表 ----------------
-METRO_URL = "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/StationTimeTable/{op}?$format=JSON"
+METRO_URL = "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/StationTimeTable/{op}?{q}$format=JSON"
+
+
+def metro_get(op, token):
+    """先用 $filter 只抓需要的車站；若 TDX 不接受篩選（400）再改抓全部。"""
+    names = sorted({stn for (o, stn, _) in METRO_WANT.values() if o == op})
+    flt = " or ".join(f"StationName/Zh_tw eq '{n}'" for n in names)
+    hdr = {"authorization": f"Bearer {token}", "accept": "application/json"}
+    try:
+        q = "$filter=" + urllib.parse.quote(flt) + "&"
+        data = http_json(urllib.request.Request(METRO_URL.format(op=op, q=q), headers=hdr))
+        if data:
+            return data
+        print(f"捷運 {op}：篩選後沒有資料，改抓全部", file=sys.stderr)
+    except RuntimeError as ex:
+        if "HTTP 400" not in str(ex):
+            raise
+        print(f"捷運 {op}：篩選不被接受，改抓全部", file=sys.stderr)
+    time.sleep(2)
+    return http_json(urllib.request.Request(METRO_URL.format(op=op, q=""), headers=hdr))
 # 各線車站順序（用來判斷某筆時刻的終點站是在「哪個方向」）
 LINE_ORDER = {
     "NTALRT": ["雙城", "玫瑰中國城", "台北小城", "耕莘安康院區", "景文科大", "安康", "陽光運動公園", "新和國小", "十四張"],
@@ -152,9 +175,7 @@ def fetch_metro(token, now):
             if op not in cache:
                 cache[op] = None                       # 先標記，失敗時同一營運者不再重複呼叫
                 time.sleep(2)                          # 間隔一下，避免短時間連續呼叫被擋
-                req = urllib.request.Request(METRO_URL.format(op=op),
-                                             headers={"authorization": f"Bearer {token}", "accept": "application/json"})
-                cache[op] = http_json(req)
+                cache[op] = metro_get(op, token)
                 print(f"捷運 {op}：{len(cache[op])} 筆車站時刻資料")
             if cache[op] is None:
                 raise RuntimeError(f"{op} 資料未取得")
