@@ -20,6 +20,7 @@
 另外輸出（供轉乘看板使用）：
   tdx/thsr-full/YYYY-MM-DD.json  高鐵每車各站 [站碼, 到站, 發車]（Nagang-trans 用）
   tdx/metro.json                 捷運／輕軌指定車站的平日、假日發車時刻（Ankang-trans、Nagang-trans 用）
+  tdx/bus-6670.json              台灣好行日月潭線（6670）往日月潭各班次：高鐵台中站發車、日月潭到站（Banqiao-SunMoonLake 用）
 
 只用 Python 標準函式庫，不需安裝任何套件。
 """
@@ -213,6 +214,63 @@ def fetch_metro(token, now):
     path.write_text(json.dumps(out, ensure_ascii=False, indent=0), encoding="utf-8")
 
 
+# ---------------- 台灣好行日月潭線（6670，公路客運） ----------------
+BUS_URL = "https://tdx.transportdata.tw/api/basic/v2/Bus/Schedule/InterCity/{route}?$format=JSON"
+DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def norm_stop(o):
+    return zh(o).replace("台中", "臺中")
+
+
+def fetch_bus_6670(token, now):
+    """抓 6670 各子路線時刻表，只留往日月潭、且會停高鐵臺中站的班次。
+    輸出每班：子路線、行駛星期、高鐵臺中站發車（無則由起點時間推估）、日月潭到站（無則留空，由網頁概估）。"""
+    time.sleep(2)
+    hdr = {"authorization": f"Bearer {token}", "accept": "application/json"}
+    data = http_json(urllib.request.Request(BUS_URL.format(route="6670"), headers=hdr))
+    print(f"好行 6670：{len(data)} 筆子路線時刻資料")
+    trips, seen_sub = [], {}
+    for r in data:
+        sub = zh(r.get("SubRouteName")) or zh(r.get("RouteName"))
+        seen_sub.setdefault(f"{sub}/方向{r.get('Direction')}", 0)
+        for tt in r.get("Timetables") or []:
+            seen_sub[f"{sub}/方向{r.get('Direction')}"] += 1
+            st = sorted(tt.get("StopTimes") or [], key=lambda x: x.get("StopSequence", 0))
+            names = [norm_stop(x.get("StopName")) for x in st]
+            hsr = next((x for x, n in zip(st, names) if "高鐵臺中" in n), None)
+            sml = next((x for x, n in zip(st, names) if n.startswith("日月潭")), None)
+            if len(st) > 1:
+                # 有完整停靠站：必須依序經過高鐵臺中站與日月潭
+                if not hsr or not sml or names.index(norm_stop(hsr.get("StopName"))) > names.index(norm_stop(sml.get("StopName"))):
+                    continue
+            else:
+                # 只有起點時間：去程、且不是 H（埔里線）、E（航空站出發）才收
+                if r.get("Direction") != 0 or sub.endswith(("H", "E")):
+                    continue
+            sd = tt.get("ServiceDay") or {}
+            days = [1 if sd.get(d) else 0 for d in DAYS]
+            first = st[0] if st else {}
+            trips.append({
+                "sub": sub,
+                "days": days,
+                "dep": ((hsr or {}).get("DepartureTime") or (hsr or {}).get("ArrivalTime") or "")[:5],
+                "start": (first.get("DepartureTime") or first.get("ArrivalTime") or "")[:5],
+                "startStop": norm_stop(first.get("StopName")),
+                "arr": ((sml or {}).get("ArrivalTime") or (sml or {}).get("DepartureTime") or "")[:5],
+            })
+    for k, v in sorted(seen_sub.items()):
+        print(f"好行 6670：{k} 共 {v} 班")
+    if not trips:
+        print("好行 6670：沒有符合（經高鐵臺中站到日月潭）的班次，保留舊檔")
+        return
+    n_dep = sum(1 for t in trips if t["dep"]); n_arr = sum(1 for t in trips if t["arr"])
+    print(f"好行 6670：往日月潭 {len(trips)} 班（有高鐵站時間 {n_dep} 班、有日月潭時間 {n_arr} 班）")
+    (OUT_DIR / "bus-6670.json").write_text(
+        json.dumps({"updated": now.strftime("%Y-%m-%d %H:%M"), "trips": trips}, ensure_ascii=False, indent=0),
+        encoding="utf-8")
+
+
 def main():
     cid, secret = os.environ.get("TDX_CLIENT_ID"), os.environ.get("TDX_CLIENT_SECRET")
     if not cid or not secret:
@@ -257,6 +315,10 @@ def main():
         if f.stem[:2] == "20" and f.stem < cutoff:
             f.unlink()
     fetch_metro(token, now)
+    try:
+        fetch_bus_6670(token, now)
+    except Exception as ex:
+        print(f"好行 6670：抓取失敗 {ex}", file=sys.stderr)
     if ok == 0:
         sys.exit("沒有任何一天抓取成功")   # 讓 GitHub Actions 標示失敗並寄信通知
 
