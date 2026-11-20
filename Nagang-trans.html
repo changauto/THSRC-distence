@@ -1,0 +1,624 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>南港高鐵轉乘看板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* 版面：單欄看板。藍＝捷運板南線，橘＝高鐵；一條縱向路線串起 南港展覽館 → 南港 → 高鐵南港 → 目的站 */
+:root{
+  --bg:#E8ECF0; --panel:#F8FAFB; --ink:#1B2530; --muted:#5B6874; --rule:#C8D1D9;
+  --blue:#0070BD; --blue-soft:#CFE3F5; --orange:#E8650E; --orange-soft:#FADBC4;
+  --warn:#9A3B1F; --lock:#F2B705; --lock-soft:#FBE7A6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141A20; --panel:#1E262E; --ink:#E9EEF2; --muted:#9AA7B3; --rule:#34414C;
+    --blue:#4DA3E6; --blue-soft:#17354F; --orange:#FF8A3D; --orange-soft:#4B2C17;
+    --warn:#F09A7A; --lock:#F7C631; --lock-soft:#4D3F12; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141A20; --panel:#1E262E; --ink:#E9EEF2; --muted:#9AA7B3; --rule:#34414C;
+  --blue:#4DA3E6; --blue-soft:#17354F; --orange:#FF8A3D; --orange-soft:#4B2C17;
+  --warn:#F09A7A; --lock:#F7C631; --lock-soft:#4D3F12; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  line-height:1.5;-webkit-font-smoothing:antialiased}
+.num{font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+main{max-width:30rem;margin:0 auto;padding:1.25rem 1.1rem 2.5rem}
+
+.clock{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem;margin-bottom:1rem}
+.clock .time{font-size:clamp(3.6rem,19vw,5.2rem);font-weight:700;line-height:.9}
+.clock .time .sec{font-size:.42em;color:var(--muted);font-weight:500;margin-left:.08em}
+.clock .date{text-align:right;color:var(--muted);font-size:.9rem;line-height:1.35}
+.daytype{display:inline-block;margin-top:.2rem;padding:.05rem .5rem;border-radius:.3rem;background:var(--panel);border:1px solid var(--rule);color:var(--ink);font-size:.8rem}
+
+/* destination picker */
+.dest{background:var(--panel);border:1px solid var(--rule);border-radius:.8rem;padding:.75rem .8rem .8rem;margin-bottom:1rem}
+.dest label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:.35rem}
+.dest .field{display:flex;gap:.5rem;align-items:center}
+.dest input[type=text]{flex:1;min-width:0;font:inherit;font-size:1.15rem;font-weight:700;padding:.5rem .7rem;border-radius:.55rem;border:2px solid var(--ink);background:var(--bg);color:var(--ink)}
+.dest input[type=text]::placeholder{font-weight:400;color:var(--muted)}
+.dest .go{font:inherit;font-size:.95rem;font-weight:700;padding:.55rem .9rem;border-radius:.55rem;border:0;background:var(--ink);color:var(--panel);cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.55rem}
+.chips button{font:inherit;font-size:.85rem;padding:.2rem .6rem;border-radius:999px;border:1px solid var(--rule);background:var(--bg);color:var(--ink);cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--orange);border-color:var(--orange);color:#fff;font-weight:700}
+.hint{font-size:.8rem;color:var(--warn);margin-top:.4rem;min-height:0}
+
+.journey{position:relative;background:var(--panel);border-radius:1rem;padding:1.1rem 1rem 1rem 0;border:1px solid var(--rule)}
+.stop{display:grid;grid-template-columns:3rem minmax(0,1fr);position:relative}
+.rail{position:relative;display:flex;justify-content:center}
+.rail::before{content:"";position:absolute;top:0;bottom:0;width:.5rem;border-radius:.25rem;background:var(--c,var(--rule))}
+.stop.first .rail::before{top:.95rem}
+.stop.last .rail::before{bottom:auto;height:1.1rem}
+.dot{position:relative;z-index:1;width:1.35rem;height:1.35rem;margin-top:.35rem;border-radius:50%;background:var(--panel);border:.3rem solid var(--dotc,var(--ink))}
+.dot.xfer{width:1.6rem;height:1.6rem;margin-top:.25rem;border-color:var(--ink);border-width:.25rem}
+.body{padding:0 0 1.15rem;min-width:0}
+.stop.last .body{padding-bottom:0}
+.station{font-weight:700;font-size:1.08rem}
+.station small{font-weight:400;color:var(--muted);font-size:.8rem;margin-left:.35rem}
+.line-tag{display:inline-block;font-size:.75rem;padding:0 .45rem;border-radius:.25rem;margin-right:.35rem;vertical-align:.12em;font-weight:500;color:var(--ink)}
+.tag-b{background:var(--blue-soft)}
+.tag-o{background:var(--orange-soft)}
+.big{font-size:3.1rem;font-weight:700;line-height:1;margin:.25rem 0 .15rem}
+.mid{font-size:2.1rem;font-weight:600;line-height:1}
+.count{font-size:.95rem}
+.count b{font-weight:700}
+.note{font-size:.82rem;color:var(--muted)}
+.note b{color:var(--ink);font-weight:700}
+.next-after{font-size:.85rem;color:var(--muted);margin-top:.35rem}
+.nl{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.25rem}
+.nl-lbl{font-size:.75rem;color:var(--muted)}
+.nl-i{font:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;min-width:4.4rem;padding:.2rem .45rem;border-radius:.5rem;background:var(--bg);border:1px solid var(--rule);color:var(--ink);line-height:1.15}
+.nl-i b{font-size:1.25rem;font-weight:600}
+.nl-i small{font-size:.7rem;color:var(--muted)}
+.nl-i.cur{background:var(--blue-soft);border:2px solid var(--blue);padding:calc(.2rem - 1px) calc(.45rem - 1px)}
+.leg{font-size:.82rem;color:var(--muted);padding:.1rem 0 .9rem}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.9rem;margin:.4rem 0 .1rem}
+.cols .lbl{font-size:.75rem;color:var(--muted)}
+.cols .arrline{font-size:.9rem;margin-top:.15rem}
+.cols .arrline b{font-size:1.15rem;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums}
+.tagbest{display:inline-block;font-size:.7rem;font-weight:700;color:#fff;background:var(--orange);border-radius:.25rem;padding:0 .35rem;margin-left:.3rem;vertical-align:.15em}
+.warn{color:var(--warn);font-size:.85rem;margin-top:.35rem}
+.better{font-size:.85rem;margin-top:.5rem;padding:.35rem .6rem;border-radius:.5rem;background:var(--orange-soft)}
+
+.actions{display:grid;margin-top:.9rem}
+.actions button{font:inherit;font-size:1.05rem;font-weight:700;padding:.85rem 1rem;border-radius:.8rem;border:0;cursor:pointer;background:var(--ink);color:var(--panel)}
+.actions button.restore{background:var(--panel);color:var(--ink);border:2px solid var(--ink)}
+.actions button:disabled{opacity:.4;cursor:not-allowed}
+.lockbar{display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem;padding:.6rem .9rem;border-radius:.7rem;background:var(--lock-soft);font-size:.9rem;border:1px solid var(--lock)}
+.journey.locked{border:2px solid var(--lock)}
+
+.train{position:absolute;left:0;top:0;width:2.1rem;height:2.1rem;transform:translate(-50%,-50%);z-index:3;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.train.anim{transition:top 1s linear,left .3s ease}
+.train svg{display:block;width:100%;height:100%}
+.train .tb{fill:var(--tc,var(--blue));stroke:var(--ink);stroke-width:1.4}
+@media (prefers-reduced-motion:no-preference){
+  .train.wait svg{animation:bob 1.6s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-2px)}}
+  .tick{animation:pulse 1s steps(1) infinite}
+  @keyframes pulse{50%{opacity:.35}}
+}
+details{margin-top:1.25rem;background:var(--panel);border:1px solid var(--rule);border-radius:.8rem}
+summary{cursor:pointer;padding:.8rem 1rem;font-weight:500}
+summary:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.set{padding:0 1rem 1rem;display:grid;gap:.9rem}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.6rem;font-size:.9rem}
+.row input[type=number],select{width:5.2rem;padding:.35rem .45rem;border-radius:.4rem;border:1px solid var(--rule);background:var(--bg);color:var(--ink);font:inherit}
+select{width:auto;max-width:100%}
+label.blk{display:block;font-size:.9rem}
+label.blk span{display:block;color:var(--muted);font-size:.78rem;margin-bottom:.25rem}
+textarea{width:100%;min-height:4.5rem;padding:.5rem;border-radius:.4rem;border:1px solid var(--rule);background:var(--bg);color:var(--ink);font:.85rem/1.4 "Barlow Condensed","Arial Narrow",sans-serif;resize:vertical}
+.btns{display:flex;gap:.6rem;flex-wrap:wrap}
+.btns button{font:inherit;font-size:.88rem;padding:.45rem .9rem;border-radius:.45rem;border:1px solid var(--rule);background:var(--bg);color:var(--ink);cursor:pointer}
+.btns button.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.saved{font-size:.8rem;color:var(--muted);align-self:center}
+footer{margin-top:1rem;font-size:.75rem;color:var(--muted);line-height:1.7}
+footer a{color:var(--blue)}
+</style>
+
+<main>
+  <section class="clock" aria-label="現在時間">
+    <div class="time num" id="clock">--:--<span class="sec">--</span></div>
+    <div class="date"><div id="date">—</div><span class="daytype" id="daytype">—</span></div>
+  </section>
+
+  <section class="dest" aria-label="目的站">
+    <label for="dest">要去的高鐵站（輸入站名，例如：台中、左營、新竹）</label>
+    <div class="field">
+      <input type="text" id="dest" list="stnList" placeholder="輸入或點選下方車站" autocomplete="off" inputmode="text" enterkeyhint="go">
+      <button type="button" class="go" id="goBtn">查詢</button>
+    </div>
+    <datalist id="stnList"></datalist>
+    <div class="chips" id="chips"></div>
+    <div class="hint" id="destHint" role="status"></div>
+  </section>
+
+  <div class="lockbar" id="lockBar" hidden>🔒 <span id="lockText"></span></div>
+
+  <section class="journey" id="journey" aria-live="polite">
+    <div class="train" id="train" aria-hidden="true">
+      <svg viewBox="0 0 32 32">
+        <rect class="tb" x="6" y="3" width="20" height="23" rx="6"/>
+        <rect x="9.5" y="7" width="13" height="8" rx="2" fill="var(--panel)" stroke="var(--ink)" stroke-width="1"/>
+        <circle cx="11" cy="20.5" r="1.8" fill="var(--panel)"/>
+        <circle cx="21" cy="20.5" r="1.8" fill="var(--panel)"/>
+        <path d="M10 26 L7 30 M22 26 L25 30" stroke="var(--ink)" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="stop first" id="s1">
+      <div class="rail"><div class="dot" id="d1"></div></div>
+      <div class="body">
+        <div class="station"><span class="line-tag tag-b">板南線</span>南港展覽館<small>往頂埔・亞東醫院</small></div>
+        <div class="big num" id="dep">--:--</div>
+        <div class="count" id="depCount">—</div>
+        <div class="next-after" id="depNext"></div>
+        <div class="note" id="depHw"></div>
+        <div class="warn" id="depWarn" hidden></div>
+      </div>
+    </div>
+    <div class="stop" id="s2">
+      <div class="rail"></div>
+      <div class="leg" id="leg1"></div>
+    </div>
+    <div class="stop" id="s3">
+      <div class="rail"><div class="dot xfer" id="d3"></div></div>
+      <div class="body">
+        <div class="station">捷運南港站<small>到站・轉乘高鐵</small></div>
+        <div class="mid num" id="arr">--:--</div>
+        <div class="note" id="xferNote"></div>
+      </div>
+    </div>
+    <div class="stop last" id="s4">
+      <div class="rail"><div class="dot" id="d4"></div></div>
+      <div class="body">
+        <div class="station" id="st4"></div>
+        <div class="cols">
+          <div><div class="lbl">最快一班</div><div class="mid num" id="b1">--:--</div><div class="note" id="b1w"></div><div class="arrline" id="b1a"></div></div>
+          <div><div class="lbl">下一班</div><div class="mid num" id="b2">--:--</div><div class="note" id="b2w"></div><div class="arrline" id="b2a"></div></div>
+        </div>
+        <div class="better" id="better" hidden></div>
+        <div class="warn" id="bWarn" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button type="button" id="lockBtn">鎖定目前畫面</button>
+    <button type="button" id="unlockBtn" class="restore" hidden>恢復即時顯示</button>
+  </div>
+
+  <details>
+    <summary>調整時間與班表</summary>
+    <div class="set">
+      <div class="row"><span>班表日（自動＝依今天）</span>
+        <select id="dayPick"><option value="auto">自動</option><option value="0">週一</option><option value="1">週二</option><option value="2">週三</option><option value="3">週四</option><option value="4">週五</option><option value="5">週六</option><option value="6">週日</option></select></div>
+      <div class="row"><span>公司走到南港展覽館月台（分）</span><input type="number" id="walkMrt" min="0" max="30"></div>
+      <div class="row"><span>南港展覽館 → 南港 乘車（分）</span><input type="number" id="ride" min="1" max="10"></div>
+      <div class="row"><span>南港站下車走到高鐵月台（分）</span><input type="number" id="walk" min="0" max="30"></div>
+      <label class="blk"><span>捷運南港展覽館發車・平日（空白＝使用內建時刻）</span><textarea id="mWd" placeholder="06:00 06:06 …"></textarea></label>
+      <label class="blk"><span>捷運南港展覽館發車・假日（空白＝使用內建時刻）</span><textarea id="mWe" placeholder="06:00 06:06 …"></textarea></label>
+      <div class="btns">
+        <button class="primary" id="save" type="button">儲存設定</button>
+        <button id="reset" type="button">恢復預設</button>
+        <span class="saved" id="savedMsg"></span>
+      </div>
+    </div>
+  </details>
+
+  <footer>
+    時間一律以台北時間計算。捷運為臺北捷運南港展覽館站往頂埔方向時刻（2026-05-11 起，平常日與假日，資料整理自 <a href="https://ericyu.org/TaipeiMetroTime/stations/BL23-b-1,2,3,4,5.html" target="_blank" rel="noopener">ericyu.org</a>，含終點亞東醫院的班次，皆會停南港站）。高鐵為南港站南下 103 班的各站到站時間與行駛星期，取自 <a href="https://taiwanhelper.com/thsr/station/0990" target="_blank" rel="noopener">交通小幫手</a>整理的班表，並已與高鐵官方時刻表 PDF（2026/2/2 起適用）核對車次、停靠站、發車時間與行駛星期（PDF 僅列發車時間，到站時間仍沿用小幫手資料）；連假、疏運與臨時加班車可能不同，出發前請以<a href="https://www.thsrc.com.tw/" target="_blank" rel="noopener">高鐵官網</a>或 T Express 為準。若網站上有 TDX 每日抓取的資料（tdx/ 資料夾），捷運與高鐵會優先使用 TDX 資料，畫面上方會標示來源。南港站轉乘步行時間為預設估計，請依實際走法在設定中調整。
+  </footer>
+</main>
+
+<script>
+(function(){
+  // ---- 內建資料 ----
+  // 捷運南港展覽館發車（往頂埔方向），平日 / 假日
+  let M_WD = "06:00 06:06 06:14 06:22 06:30 06:35 06:42 06:47 06:54 06:58 07:04 07:07 07:14 07:19 07:23 07:25 07:29 07:32 07:36 07:39 07:42 07:46 07:49 07:52 07:56 07:59 08:02 08:06 08:09 08:12 08:14 08:16 08:19 08:21 08:23 08:25 08:28 08:32 08:34 08:38 08:40 08:42 08:45 08:47 08:51 08:54 08:58 09:00 09:04 09:06 09:09 09:12 09:16 09:20 09:24 09:27 09:30 09:33 09:37 09:40 09:43 09:46 09:49 09:52 09:54 09:57 10:02 10:06 10:11 10:15 10:20 10:24 10:29 10:33 10:38 10:42 10:47 10:51 10:56 11:00 11:05 11:09 11:14 11:18 11:23 11:27 11:32 11:36 11:41 11:45 11:50 11:54 11:59 12:03 12:08 12:12 12:17 12:21 12:26 12:30 12:35 12:39 12:44 12:48 12:53 12:57 13:02 13:06 13:11 13:15 13:20 13:24 13:29 13:33 13:38 13:42 13:47 13:51 13:56 14:00 14:05 14:09 14:14 14:18 14:23 14:27 14:32 14:36 14:41 14:45 14:50 14:54 14:59 15:03 15:08 15:12 15:17 15:21 15:26 15:30 15:35 15:39 15:44 15:48 15:53 15:57 16:02 16:06 16:11 16:15 16:18 16:21 16:26 16:31 16:36 16:40 16:43 16:47 16:50 16:54 16:57 17:01 17:04 17:08 17:11 17:15 17:18 17:22 17:26 17:30 17:33 17:35 17:38 17:41 17:43 17:46 17:49 17:52 17:55 17:57 18:00 18:03 18:05 18:07 18:10 18:13 18:17 18:19 18:21 18:24 18:27 18:31 18:34 18:37 18:40 18:43 18:46 18:49 18:53 18:56 18:59 19:03 19:07 19:11 19:14 19:18 19:21 19:25 19:28 19:31 19:35 19:39 19:42 19:46 19:49 19:53 19:56 20:00 20:03 20:07 20:10 20:14 20:17 20:21 20:24 20:28 20:31 20:35 20:38 20:42 20:45 20:49 20:52 20:56 20:59 21:03 21:06 21:10 21:13 21:17 21:20 21:24 21:27 21:31 21:34 21:38 21:41 21:45 21:48 21:52 21:55 21:59 22:02 22:06 22:09 22:13 22:16 22:20 22:23 22:27 22:30 22:34 22:37 22:41 22:44 22:48 22:51 22:55 22:58 23:02 23:05 23:13 23:20 23:28 23:36 23:44 23:52 00:00";
+  let M_WE = "06:00 06:06 06:14 06:23 06:32 06:41 06:49 06:58 07:06 07:15 07:23 07:27 07:32 07:40 07:50 07:54 07:59 08:09 08:14 08:19 08:24 08:28 08:33 08:38 08:43 08:48 08:53 08:57 09:02 09:07 09:12 09:17 09:22 09:26 09:31 09:36 09:41 09:46 09:51 09:55 10:00 10:05 10:10 10:15 10:20 10:24 10:29 10:34 10:39 10:44 10:48 10:52 10:56 11:00 11:04 11:08 11:12 11:16 11:20 11:24 11:28 11:32 11:36 11:40 11:44 11:48 11:52 11:56 12:00 12:04 12:08 12:12 12:16 12:20 12:24 12:28 12:32 12:36 12:40 12:44 12:48 12:52 12:56 13:00 13:04 13:08 13:12 13:16 13:20 13:24 13:28 13:32 13:36 13:40 13:44 13:48 13:52 13:56 14:00 14:04 14:08 14:12 14:16 14:20 14:24 14:28 14:32 14:36 14:40 14:44 14:48 14:52 14:56 15:00 15:04 15:08 15:12 15:16 15:20 15:24 15:28 15:32 15:36 15:40 15:44 15:48 15:52 15:56 16:00 16:04 16:07 16:11 16:16 16:20 16:24 16:28 16:32 16:35 16:40 16:43 16:46 16:50 16:53 16:57 17:00 17:04 17:07 17:11 17:14 17:18 17:21 17:25 17:28 17:32 17:35 17:39 17:42 17:46 17:49 17:53 17:56 18:00 18:03 18:07 18:10 18:14 18:17 18:21 18:24 18:28 18:31 18:35 18:38 18:42 18:46 18:50 18:53 18:57 19:00 19:04 19:07 19:11 19:14 19:18 19:21 19:25 19:28 19:31 19:35 19:39 19:42 19:46 19:49 19:53 19:56 20:00 20:03 20:07 20:10 20:14 20:17 20:21 20:24 20:28 20:31 20:35 20:38 20:42 20:45 20:49 20:52 20:56 20:59 21:03 21:06 21:10 21:13 21:17 21:20 21:24 21:27 21:31 21:34 21:38 21:41 21:45 21:48 21:52 21:55 21:59 22:02 22:06 22:09 22:13 22:16 22:20 22:23 22:27 22:30 22:34 22:37 22:41 22:44 22:48 22:51 22:55 22:58 23:02 23:05 23:13 23:20 23:28 23:36 23:44 23:52 00:00";
+  // 高鐵南港站南下班次：車次|行駛日(週一..週日)|站碼@到(發)時間 …
+  const THSR_RAW = `0803|1111111|0990@06:15,1000@06:23,1010@06:33,1020@06:47,1030@07:00,1035@07:12,1040@07:30,1043@07:44,1047@07:55,1050@08:09,1060@08:26,1070@08:40
+1103|1000010|0990@06:35,1000@06:43,1010@06:53,1040@07:33,1070@08:20
+0603|1111111|0990@06:40,1000@06:48,1010@06:59,1020@07:13,1030@07:26,1040@07:51,1050@08:18,1060@08:37,1070@08:50
+0805|1111111|0990@07:00,1000@07:08,1010@07:18,1020@07:32,1030@07:45,1035@07:57,1040@08:15,1043@08:27,1047@08:40,1050@08:54,1060@09:11,1070@09:25
+1607|0000010|0990@07:10,1000@07:18,1010@07:28,1020@07:41,1030@07:53,1040@08:23,1050@08:48,1060@09:06,1070@09:20
+0109|1111111|0990@07:20,1000@07:28,1010@07:38,1040@08:18,1070@09:05
+1505|1111110|0990@07:25,1000@07:33,1010@07:45,1020@07:59,1030@08:11,1035@08:23,1040@08:42
+0609|1111111|0990@07:35,1000@07:43,1010@07:54,1020@08:07,1030@08:21,1040@08:46,1050@09:13,1060@09:32,1070@09:45
+0205|1111111|0990@07:40,1000@07:48,1010@07:58,1040@08:38,1060@09:17,1070@09:30
+1305|1111110|0990@07:50,1000@07:58,1020@08:18,1040@08:52,1043@09:05,1047@09:16,1050@09:28,1060@09:45,1070@10:00
+0809|1111111|0990@08:00,1000@08:08,1010@08:18,1020@08:32,1030@08:45,1035@08:57,1040@09:15,1043@09:27,1047@09:39,1050@09:54,1060@10:11,1070@10:25
+0613|1111111|0990@08:10,1000@08:18,1010@08:28,1020@08:41,1030@08:53,1040@09:23,1050@09:48,1060@10:06,1070@10:20
+0207|1111111|0990@08:20,1000@08:28,1010@08:38,1040@09:18,1060@09:56,1070@10:10
+1509|0001010|0990@08:25,1000@08:33,1010@08:45,1020@08:59,1030@09:11,1035@09:23,1040@09:42
+0615|1111111|0990@08:35,1000@08:43,1010@08:54,1020@09:08,1030@09:21,1040@09:46,1050@10:13,1060@10:32,1070@10:45
+1209|1000010|0990@08:40,1000@08:48,1010@08:58,1040@09:38,1060@10:17,1070@10:30
+1307|0111110|0990@08:50,1000@08:58,1020@09:18,1040@09:52,1043@10:05,1047@10:16,1050@10:28,1060@10:45,1070@11:00
+0813|1111111|0990@09:00,1000@09:08,1010@09:18,1020@09:32,1030@09:45,1035@09:57,1040@10:15,1043@10:27,1047@10:39,1050@10:54,1060@11:11,1070@11:25
+0619|1111111|0990@09:10,1000@09:18,1010@09:28,1020@09:41,1030@09:53,1040@10:23,1050@10:48,1060@11:06,1070@11:20
+0117|1111111|0990@09:20,1000@09:28,1010@09:38,1040@10:18,1070@11:05
+1513|0000010|0990@09:25,1000@09:33,1010@09:45,1020@09:59,1030@10:11,1035@10:23,1040@10:42
+0621|1111111|0990@09:35,1000@09:43,1010@09:54,1020@10:08,1030@10:21,1040@10:46,1050@11:13,1060@11:32,1070@11:45
+1213|1000011|0990@09:40,1000@09:48,1010@09:58,1040@10:38,1060@11:17,1070@11:30
+1309|0001110|0990@09:50,1000@09:58,1020@10:18,1040@10:52,1043@11:05,1047@11:16,1050@11:28,1060@11:45,1070@12:00
+0817|1111111|0990@10:00,1000@10:08,1010@10:18,1020@10:32,1030@10:45,1035@10:57,1040@11:15,1043@11:27,1047@11:39,1050@11:54,1060@12:11,1070@12:25
+0625|1111111|0990@10:10,1000@10:18,1010@10:28,1020@10:41,1030@10:53,1040@11:23,1050@11:48,1060@12:06,1070@12:20
+0121|1111111|0990@10:20,1000@10:28,1010@10:38,1040@11:18,1070@12:05
+0627|1111111|0990@10:35,1000@10:43,1010@10:54,1020@11:08,1030@11:21,1040@11:46,1050@12:13,1060@12:32,1070@12:45
+1217|0000110|0990@10:40,1000@10:48,1010@10:58,1040@11:38,1060@12:17,1070@12:30
+1311|1000000|0990@10:50,1000@10:58,1020@11:18,1040@11:52,1043@12:05,1047@12:16,1050@12:28,1060@12:45,1070@13:00
+0821|1111111|0990@11:00,1000@11:08,1010@11:18,1020@11:32,1030@11:45,1035@11:57,1040@12:15,1043@12:27,1047@12:40,1050@12:54,1060@13:11,1070@13:25
+1631|1001111|0990@11:10,1000@11:18,1010@11:28,1020@11:41,1030@11:53,1040@12:23,1050@12:48,1060@13:06,1070@13:20
+0125|1111111|0990@11:20,1000@11:28,1010@11:38,1040@12:18,1070@13:05
+0633|1111111|0990@11:35,1000@11:43,1010@11:54,1020@12:08,1030@12:21,1040@12:46,1050@13:13,1060@13:32,1070@13:45
+1313|0000010|0990@11:50,1000@11:58,1020@12:18,1040@12:52,1043@13:05,1047@13:16,1050@13:28,1060@13:45,1070@14:00
+0825|1111111|0990@12:00,1000@12:08,1010@12:18,1020@12:32,1030@12:45,1035@12:57,1040@13:15,1043@13:27,1047@13:39,1050@13:54,1060@14:11,1070@14:25
+0637|1111111|0990@12:10,1000@12:18,1010@12:28,1020@12:41,1030@12:53,1040@13:23,1050@13:48,1060@14:06,1070@14:20
+0129|1111111|0990@12:20,1000@12:28,1010@12:38,1040@13:18,1070@14:05
+0639|1111111|0990@12:35,1000@12:43,1010@12:54,1020@13:08,1030@13:21,1040@13:46,1050@14:13,1060@14:32,1070@14:45
+1225|0000010|0990@12:40,1000@12:48,1010@12:58,1040@13:38,1060@14:17,1070@14:30
+0829|1111111|0990@13:00,1000@13:08,1010@13:18,1020@13:32,1030@13:45,1035@13:57,1040@14:15,1043@14:27,1047@14:39,1050@14:54,1060@15:11,1070@15:25
+0643|1111111|0990@13:10,1000@13:18,1010@13:28,1020@13:41,1030@13:53,1040@14:23,1050@14:48,1060@15:06,1070@15:20
+0133|1111111|0990@13:20,1000@13:28,1010@13:38,1040@14:18,1070@15:05
+0645|1111111|0990@13:35,1000@13:43,1010@13:54,1020@14:07,1030@14:21,1040@14:46,1050@15:13,1060@15:32,1070@15:45
+1229|0000101|0990@13:40,1000@13:48,1010@13:58,1040@14:38,1060@15:17,1070@15:30
+1317|0000010|0990@13:50,1000@13:58,1020@14:18,1040@14:52,1043@15:05,1047@15:16,1050@15:28,1060@15:45,1070@16:00
+0833|1111111|0990@14:00,1000@14:08,1010@14:18,1020@14:32,1030@14:45,1035@14:57,1040@15:15,1043@15:27,1047@15:39,1050@15:54,1060@16:11,1070@16:25
+0649|1111111|0990@14:10,1000@14:18,1010@14:28,1020@14:41,1030@14:53,1040@15:23,1050@15:48,1060@16:06,1070@16:20
+0137|1111111|0990@14:20,1000@14:28,1010@14:38,1040@15:18,1070@16:05
+1533|0000001|0990@14:25,1000@14:33,1010@14:45,1020@14:59,1030@15:11,1035@15:23,1040@15:42
+0651|1111111|0990@14:35,1000@14:43,1010@14:54,1020@15:08,1030@15:21,1040@15:46,1050@16:13,1060@16:32,1070@16:45
+1233|0000111|0990@14:40,1000@14:48,1010@14:58,1040@15:38,1060@16:17,1070@16:30
+0837|1111111|0990@15:00,1000@15:08,1010@15:18,1020@15:32,1030@15:45,1035@15:57,1040@16:15,1043@16:27,1047@16:39,1050@16:54,1060@17:11,1070@17:25
+0655|1111111|0990@15:10,1000@15:18,1010@15:28,1020@15:41,1030@15:53,1040@16:23,1050@16:48,1060@17:06,1070@17:20
+0141|1111111|0990@15:20,1000@15:28,1010@15:38,1040@16:18,1070@17:05
+1537|0000101|0990@15:25,1000@15:33,1010@15:45,1020@15:59,1030@16:11,1035@16:23,1040@16:42
+0657|1111111|0990@15:35,1000@15:43,1010@15:54,1020@16:08,1030@16:21,1040@16:46,1050@17:13,1060@17:32,1070@17:45
+1237|0000101|0990@15:40,1000@15:48,1010@15:58,1040@16:38,1060@17:17,1070@17:30
+1321|1111010|0990@15:50,1000@15:58,1020@16:18,1040@16:52,1043@17:05,1047@17:16,1050@17:28,1060@17:45,1070@18:00
+0841|1111111|0990@16:00,1000@16:08,1010@16:18,1020@16:32,1030@16:45,1035@16:57,1040@17:15,1043@17:27,1047@17:39,1050@17:54,1060@18:11,1070@18:25
+0661|1111111|0990@16:10,1000@16:18,1010@16:28,1020@16:41,1030@16:53,1040@17:23,1050@17:48,1060@18:06,1070@18:20
+0145|1111111|0990@16:20,1000@16:28,1010@16:38,1040@17:18,1070@18:05
+1541|0000001|0990@16:25,1000@16:33,1010@16:45,1020@16:59,1030@17:11,1035@17:23,1040@17:42
+0663|1111111|0990@16:35,1000@16:43,1010@16:54,1020@17:07,1030@17:21,1040@17:46,1050@18:13,1060@18:32,1070@18:45
+1241|1111101|0990@16:40,1000@16:48,1010@16:58,1040@17:38,1060@18:17,1070@18:30
+0845|1111111|0990@17:00,1000@17:08,1010@17:18,1020@17:32,1030@17:45,1035@17:57,1040@18:15,1043@18:27,1047@18:39,1050@18:54,1060@19:11,1070@19:25
+0667|1111111|0990@17:10,1000@17:18,1010@17:28,1020@17:41,1030@17:53,1040@18:23,1050@18:48,1060@19:06,1070@19:20
+0149|1111111|0990@17:20,1000@17:28,1010@17:38,1040@18:18,1070@19:05
+1545|0000001|0990@17:25,1000@17:33,1010@17:45,1020@17:59,1030@18:11,1035@18:23,1040@18:42
+0669|1111111|0990@17:35,1000@17:43,1010@17:54,1020@18:08,1030@18:21,1040@18:46,1050@19:13,1060@19:32,1070@19:45
+1245|0001101|0990@17:40,1000@17:48,1010@17:58,1040@18:38,1060@19:17,1070@19:30
+1547|1111100|0990@17:45,1000@17:53,1010@18:03,1020@18:15,1030@18:27,1035@18:39,1040@18:56
+0849|1111111|0990@18:00,1000@18:08,1010@18:18,1020@18:32,1030@18:45,1035@18:57,1040@19:15,1043@19:27,1047@19:39,1050@19:54,1060@20:11,1070@20:25
+0673|1111111|0990@18:10,1000@18:18,1010@18:28,1020@18:41,1030@18:53,1040@19:23,1050@19:48,1060@20:06,1070@20:20
+0153|1111111|0990@18:20,1000@18:28,1010@18:38,1040@19:18,1070@20:05
+1549|1111101|0990@18:25,1000@18:33,1010@18:45,1020@18:59,1030@19:11,1035@19:23,1040@19:42
+0675|1111111|0990@18:35,1000@18:43,1010@18:54,1020@19:07,1030@19:21,1040@19:46,1050@20:13,1060@20:32,1070@20:45
+0249|1111111|0990@18:40,1000@18:48,1010@18:58,1040@19:38,1060@20:17,1070@20:30
+1327|0000100|0990@18:50,1000@18:58,1020@19:18,1040@19:52,1043@20:05,1047@20:16,1050@20:28,1060@20:45,1070@21:00
+0853|1111111|0990@19:00,1000@19:08,1010@19:18,1020@19:32,1030@19:45,1035@19:57,1040@20:15,1043@20:27,1047@20:39,1050@20:54,1060@21:11,1070@21:25
+0679|1111111|0990@19:10,1000@19:18,1010@19:28,1020@19:41,1030@19:53,1040@20:23,1050@20:48,1060@21:06,1070@21:20
+0157|1111111|0990@19:20,1000@19:28,1010@19:38,1040@20:18,1070@21:05
+1553|0000001|0990@19:25,1000@19:33,1010@19:45,1020@19:59,1030@20:11,1035@20:23,1040@20:42
+0681|1111111|0990@19:35,1000@19:43,1010@19:54,1020@20:08,1030@20:21,1040@20:46,1050@21:13,1060@21:32,1070@21:45
+1253|0000101|0990@19:40,1000@19:48,1010@19:58,1040@20:38,1060@21:17,1070@21:30
+0857|1111111|0990@20:00,1000@20:08,1010@20:18,1020@20:32,1030@20:45,1035@20:57,1040@21:15,1043@21:27,1047@21:39,1050@21:54,1060@22:11,1070@22:25
+1685|0001111|0990@20:10,1000@20:18,1010@20:28,1020@20:41,1030@20:53,1040@21:23,1050@21:48,1060@22:06,1070@22:20
+0161|1111111|0990@20:20,1000@20:28,1010@20:38,1040@21:18,1070@22:05
+1557|0000101|0990@20:25,1000@20:33,1010@20:45,1020@20:59,1030@21:11,1035@21:23,1040@21:42
+0687|1111111|0990@20:35,1000@20:43,1010@20:54,1020@21:07,1030@21:21,1040@21:46,1050@22:13,1060@22:32,1070@22:45
+1257|0000101|0990@20:40,1000@20:48,1010@20:58,1040@21:38,1060@22:17,1070@22:30
+1331|0000001|0990@20:50,1000@20:58,1020@21:18,1040@21:52,1043@22:05,1047@22:16,1050@22:28,1060@22:45,1070@23:00
+0861|1111111|0990@21:00,1000@21:08,1010@21:18,1020@21:32,1030@21:45,1035@21:57,1040@22:15,1043@22:27,1047@22:39,1050@22:54,1060@23:11,1070@23:25
+1691|0000100|0990@21:10,1000@21:18,1010@21:28,1020@21:41,1030@21:53,1040@22:23,1050@22:48,1060@23:06,1070@23:20
+0165|1111111|0990@21:20,1000@21:28,1010@21:38,1040@22:18,1070@23:05
+0693|1111111|0990@21:30,1000@21:38,1010@21:49,1020@22:03,1030@22:16,1040@22:41,1050@23:08,1060@23:26,1070@23:40
+0333|1111111|0990@21:45,1000@21:53,1020@22:13,1040@22:47,1043@22:59,1047@23:11,1050@23:22,1060@23:41,1070@23:55
+1563|0000101|0990@21:55,1000@22:02,1010@22:13,1020@22:26,1030@22:38,1035@22:50,1040@23:10
+1985|1111100|0990@22:00,1000@22:07,1010@22:17,1060@23:32,1070@23:45
+0295|1111111|0990@22:05,1000@22:13,1020@22:33,1040@23:05,1050@23:29,1060@23:47,1070@23:59
+0565|1111111|0990@22:15,1000@22:23,1010@22:34,1020@22:47,1030@22:58,1035@23:11,1040@23:29
+1575|0000010|0990@22:30,1000@22:38,1020@22:58,1030@23:10,1040@23:36
+0567|1111111|0990@22:50,1000@22:57,1010@23:07,1020@23:19,1030@23:30,1035@23:42,1040@23:59`;
+  const STN = [["台北","1000"],["板橋","1010"],["桃園","1020"],["新竹","1030"],["苗栗","1035"],["台中","1040"],["彰化","1043"],["雲林","1047"],["嘉義","1050"],["台南","1060"],["左營","1070"]];
+  const ALIAS = {"taipei":"台北","banqiao":"板橋","taoyuan":"桃園","hsinchu":"新竹","miaoli":"苗栗","taichung":"台中","changhua":"彰化","yunlin":"雲林","chiayi":"嘉義","tainan":"台南","zuoying":"左營","kaohsiung":"左營","高雄":"左營","桃園機場":"桃園","青埔":"桃園","竹北":"新竹"};
+
+  // ---- TDX 資料（GitHub Actions 每天抓好放在同一個網站的 tdx/ 資料夾）----
+  // 捷運：tdx/metro.json 的 BL23_W（南港展覽館發車）取代內建時刻；設定區有自填時刻則以自填為準。
+  // 高鐵：tdx/thsr-full/YYYY-MM-DD.json 當日實際班次（含加班車），只取南港發車的南下車；目的站用到站時間。
+  // 抓不到（claude.ai 預覽、離線、Actions 失敗）就沿用內建資料。
+  let MT_SRC = "", TH_TDX = null, TH_DATE = "", TH_SRC = "";
+  const svcDate = () => new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit"})
+    .format(new Date(Date.now() - (taipeiNow().h<3 ? 86400000 : 0)));   // 03:00 前算前一營運日
+  function loadMetro(){
+    fetch("tdx/metro.json",{cache:"no-cache"}).then(r=>r.ok?r.json():null).then(j=>{
+      const d = j && j.BL23_W; if(!d) return;
+      if(d.wd && parseTimes(d.wd).length>=50) M_WD = d.wd;   // 資料太少視為異常，不採用
+      if(d.we && parseTimes(d.we).length>=50) M_WE = d.we;
+      MT_SRC = j.updated||""; render();
+    }).catch(()=>{});
+  }
+  function loadThsr(){
+    const date = svcDate(); TH_DATE = date;
+    fetch(`tdx/thsr-full/${date}.json`,{cache:"no-cache"}).then(r=>r.ok?r.json():null).then(j=>{
+      if(!j || !j.trains) return;
+      const list = [];
+      j.trains.forEach(([no, st])=>{
+        if(!st.length || st[0][0]!=="0990") return;          // 只要南港發車的南下車
+        const stops = {}; let prev=-1, add=0;
+        st.forEach(([id,arr,dep],i)=>{
+          const t = i===0 ? (dep||arr) : (arr||dep);
+          let m = toMin(t)+add; if(m<prev){ add+=1440; m+=1440; } prev=m;   // 跨午夜
+          stops[id] = m;
+        });
+        list.push({no, stops, dep:stops["0990"], days:[1,1,1,1,1,1,1].map(Boolean)});
+      });
+      if(list.length<20) return;                               // 異常就不用
+      TH_TDX = list.sort((a,b)=>a.dep-b.dep); TH_SRC = j.updated||""; render();
+    }).catch(()=>{});
+  }
+
+  const DEFAULTS = {dest:"台中",dayPick:"auto",walkMrt:0,ride:2,walk:8,mWd:"",mWe:""};
+  const KEY = "nangang-hsr-v1", LOCK_KEY = "nangang-hsr-lock";
+  let cfg = Object.assign({}, DEFAULTS);
+  try{ const s = localStorage.getItem(KEY); if(s) cfg = Object.assign(cfg, JSON.parse(s)); }catch(e){}
+  let lock = null, pick = null;   // pick＝使用者點選的捷運發車時間（分鐘），不存檔
+  try{ const s = localStorage.getItem(LOCK_KEY); if(s) lock = JSON.parse(s); }catch(e){}
+  function setLock(v){
+    lock = v;
+    try{ v ? localStorage.setItem(LOCK_KEY, JSON.stringify(v)) : localStorage.removeItem(LOCK_KEY); }catch(e){}
+  }
+  const saveCfg = () => { try{ localStorage.setItem(KEY, JSON.stringify(cfg)); return true; }catch(e){ return false; } };
+
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2,"0");
+  const WEEK = ["日","一","二","三","四","五","六"];
+  const fmt = min => pad(Math.floor(min/60)%24)+":"+pad(min%60);
+  const toMin = s => { const [h,m] = s.split(":").map(Number); return h*60+m; };
+
+  function taipeiNow(){
+    const parts = new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Taipei",month:"2-digit",day:"2-digit",weekday:"short",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
+    const o = {}; parts.forEach(p=>o[p.type]=p.value);
+    const wd = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6}[o.weekday];
+    const h=+o.hour, m=+o.minute, s=+o.second;
+    let svcSec = h*3600+m*60+s, svcWd = wd;
+    if(h<3){ svcSec += 86400; svcWd = (wd+6)%7; }   // 00:00–02:59 算前一營運日的 24:00–26:59
+    return {h,m,s,mo:+o.month,d:+o.day,wd,svcSec,svcWd};
+  }
+  function parseTimes(txt){
+    const out = [];
+    ((txt||"").match(/\d{1,2}[:：]\d{2}/g)||[]).forEach(t=>{
+      let [h,m] = t.split(/[:：]/).map(Number);
+      if(h<3) h+=24;
+      out.push(h*60+m);
+    });
+    return [...new Set(out)].sort((a,b)=>a-b);
+  }
+  // 高鐵班表解析
+  const TH = THSR_RAW.trim().split("\n").map(line=>{
+    const [no,days,st] = line.trim().split("|");
+    const stops = {};
+    st.split(",").forEach(x=>{ const [id,t] = x.split("@"); stops[id] = toMin(t); });
+    return {no, days:days.split("").map(c=>c==="1"), stops, dep:stops["0990"]};
+  }).sort((a,b)=>a.dep-b.dep);
+
+  function resolveDest(txt){
+    let s = (txt||"").trim().toLowerCase().replace(/臺/g,"台").replace(/高鐵|站|\s/g,"");
+    if(!s) return null;
+    if(ALIAS[s]) s = ALIAS[s];
+    const hit = STN.find(x=>x[0]===s);
+    return hit ? {name:hit[0], id:hit[1]} : null;
+  }
+
+  const TAG_B = '<span class="line-tag tag-b">板南線</span>';
+  const TAG_O = '<span class="line-tag tag-o">高鐵</span>';
+  function countdown(sec){
+    if(sec<=0) return "<b>即將發車</b>";
+    const m=Math.floor(sec/60), s=sec%60;
+    return m>=60 ? `還有 <b>${Math.floor(m/60)} 小時 ${m%60} 分</b>` : `還有 <b>${m} 分 ${pad(s)} 秒</b>`;
+  }
+  function dur(min){ return min>=60 ? `${Math.floor(min/60)} 小時 ${min%60} 分` : `${min} 分`; }
+
+  let curDep, curWidx, curNowSec;
+
+  function render(){
+    const n = taipeiNow();
+    $("clock").innerHTML = `${pad(n.h)}<span class="tick">:</span>${pad(n.m)}<span class="sec">${pad(n.s)}</span>`;
+    $("date").textContent = `${n.mo} 月 ${n.d} 日（${WEEK[n.wd]}）`;
+    if(lock && Date.now() > lock.depEpoch + 6*3600e3) setLock(null);
+    let widx = cfg.dayPick==="auto" ? (n.svcWd+6)%7 : +cfg.dayPick;   // 0=週一 … 6=週日
+    if(lock) widx = lock.widx;
+    const holiday = widx>=5;
+    syncLockUI();
+    if(TH_DATE && TH_DATE!==svcDate()){ TH_TDX=null; loadThsr(); }   // 跨營運日重新載入
+    const useTdx = TH_TDX && cfg.dayPick==="auto" && !lock;           // 手動指定星期或鎖定時用內建班表
+    $("daytype").textContent = `週${"一二三四五六日"[widx]}・${holiday?"假日":"平日"}班表・高鐵${useTdx?"：TDX 當日":"：內建"}・捷運${MT_SRC?"：TDX":"：內建"}`;
+
+    const dest = resolveDest(cfg.dest) || resolveDest(DEFAULTS.dest);
+    $("st4").innerHTML = `${TAG_O}南港站<small>往 ${dest.name}</small>`;
+    document.querySelectorAll("#chips button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.n===dest.name)));
+
+    $("s1").style.setProperty("--c","var(--blue)"); $("d1").style.setProperty("--dotc","var(--blue)");
+    $("s2").style.setProperty("--c","var(--blue)");
+    $("s3").style.setProperty("--c","var(--orange)"); $("s4").style.setProperty("--c","var(--orange)");
+    $("d4").style.setProperty("--dotc","var(--orange)");
+    $("d3").style.background = "linear-gradient(90deg,var(--blue) 50%,var(--orange) 50%)";
+    const ride = +cfg.ride, walk = +cfg.walk, walkMrt = +cfg.walkMrt;
+    $("leg1").textContent = `乘車約 ${ride} 分鐘（下一站）`;
+    $("xferNote").textContent = `走到高鐵月台約 ${walk} 分鐘`;
+
+    const warnA = $("depWarn"), warnB = $("bWarn");
+    warnA.hidden = true; warnB.hidden = true; $("better").hidden = true;
+    const wdList = parseTimes(cfg.mWd).length ? parseTimes(cfg.mWd) : parseTimes(M_WD);
+    const weList = parseTimes(cfg.mWe).length ? parseTimes(cfg.mWe) : parseTimes(M_WE);
+    const list = holiday ? weList : wdList;
+    const readySec = n.svcSec + walkMrt*60;
+    const autoDep = list.find(t => t*60+59 >= readySec);          // 最近一班
+    const fiveAll = autoDep===undefined ? [] : list.slice(list.indexOf(autoDep), list.indexOf(autoDep)+5);
+    if(pick!==null && !fiveAll.includes(pick)) pick = null;        // 選的那班已開走就回到最近一班
+    const dep = lock ? lock.dep : (pick!==null ? pick : autoDep);
+    curDep = dep; curWidx = widx; curNowSec = n.svcSec;
+    $("lockBtn").disabled = dep===undefined;
+    const clearB = () => { ["b1","b2"].forEach(id=>$(id).textContent="--:--"); ["b1w","b2w","b1a","b2a"].forEach(id=>$(id).innerHTML=""); };
+
+    if(dep===undefined){
+      $("dep").textContent="--:--";
+      $("depCount").innerHTML="今天捷運末班已開走";
+      $("depNext").textContent = list.length ? `明天首班 ${fmt(list[0])}` : ""; $("depNext")._h = null; $("depHw").textContent = "";
+      $("arr").textContent="--:--"; clearB(); placeTrain(null); return;
+    }
+    const idx = list.indexOf(dep);
+    $("dep").textContent = fmt(dep);
+    if(lock){
+      const remain = Math.round((lock.depEpoch + ride*60000 - Date.now())/1000);
+      $("depCount").innerHTML = remain>0
+        ? `已上車・約 <b>${Math.floor(remain/60)} 分 ${pad(remain%60)} 秒</b>後到南港`
+        : "<b>已抵達南港</b>";
+      $("depNext").textContent = ""; $("depNext")._h = null;
+    }else{
+      $("depCount").innerHTML = countdown(dep*60 - n.svcSec) + (walkMrt? `（已預留步行 ${walkMrt} 分）`:"");
+      const five = fiveAll;   // 最近一班起算，共五班
+      const nhtml = `<div class="nl-lbl">接下來 ${five.length} 班捷運・點選要搭的班次</div><div class="nl">` +
+        five.map(t=>`<button type="button" class="nl-i${t===dep?" cur":""}" data-t="${t}" aria-pressed="${t===dep}"><b class="num">${fmt(t)}</b><small>${Math.max(0,Math.floor((t*60-n.svcSec)/60))} 分後</small><small>${fmt(t+ride)} 到南港</small></button>`).join("") +
+        `</div>` + (five.length<5 ? `<div class="nl-lbl">之後沒有更多班次</div>` : "");
+      // 內容沒變就不重畫，避免每秒重繪吃掉點擊
+      if($("depNext")._h !== nhtml){ $("depNext").innerHTML = nhtml; $("depNext")._h = nhtml; }
+    }
+
+    // 班距：本班起往後最多 4 個間隔，顯示平均與範圍，方便估算後續班次
+    const gaps = [];
+    for(let i=idx; i>=0 && i<list.length-1 && gaps.length<4; i++) gaps.push(list[i+1]-list[i]);
+    if(gaps.length){
+      const avg = Math.round(gaps.reduce((s,g)=>s+g,0)/gaps.length);
+      const lo = Math.min(...gaps), hi = Math.max(...gaps);
+      $("depHw").textContent = `目前班距約 ${avg} 分鐘一班` + (lo!==hi ? `（${lo}–${hi} 分）` : "");
+    }else $("depHw").textContent = "";
+    const arr = dep + ride;
+    $("arr").textContent = fmt(arr);
+    const ready = arr + walk;
+    // 能接上、且停靠目的站的高鐵
+    const cands = (useTdx ? TH_TDX : TH).filter(t => t.days[widx] && t.stops[dest.id]!==undefined && t.dep>=ready);
+    const shown = cands.slice(0,2);
+    [["b1","b1w","b1a"],["b2","b2w","b2a"]].forEach(([a,b,c],i)=>{
+      const t = shown[i];
+      if(t){
+        $(a).textContent = fmt(t.dep);
+        $(b).innerHTML = `<b>${t.no}</b> 次・等 ${t.dep-arr} 分`;
+        const at = t.stops[dest.id];
+        $(c).innerHTML = `${dest.name} <b>${fmt(at)}</b> 到<br><span class="note">行車 ${dur(at-t.dep)}</span>`;
+      }else{ $(a).textContent="--:--"; $(b).innerHTML=""; $(c).innerHTML=""; }
+    });
+    // 往後 6 班裡抵達最早者（快車可能比較晚發的慢車更早到）
+    if(cands.length>1){
+      const pool = cands.slice(0,6);
+      const best = pool.reduce((m,t)=> t.stops[dest.id] < m.stops[dest.id] ? t : m, pool[0]);
+      const firstArr = shown[0].stops[dest.id];
+      if(best.stops[dest.id] < firstArr){
+        const el = $("better");
+        el.hidden = false;
+        el.innerHTML = best===shown[1]
+          ? `下一班 <b>${best.no}</b> 次雖晚發車，反而比第一班早到（${fmt(best.stops[dest.id])}）。`
+          : `<b>${best.no}</b> 次 ${fmt(best.dep)} 發車，${fmt(best.stops[dest.id])} 到${dest.name}，是接下來最早抵達的班次。`;
+      }
+    }
+    const msgs=[];
+    if(shown.length<2) msgs.push(shown.length ? "之後就沒有直達或停靠該站的車了。" : `今天南港已沒有接得上、開往${dest.name}的高鐵。`);
+    if(msgs.length){ warnB.hidden=false; warnB.textContent=msgs.join(" "); }
+    placeTrain(lock ? {
+      depT: lock.depEpoch,
+      arrT: lock.depEpoch + ride*60000,
+      b1T: shown[0] ? lock.depEpoch + (shown[0].dep-dep)*60000 : null
+    } : null);
+  }
+
+  // 列車圖示：起站發車前停在起點 → 乘車中移到南港 → 轉乘中移到高鐵月台（換橘色）
+  let trainReady = false;
+  function placeTrain(s){
+    const tr = $("train"), box = $("journey").getBoundingClientRect();
+    const c = id => { const r=$(id).getBoundingClientRect(); return {x:r.left+r.width/2-box.left, y:r.top+r.height/2-box.top}; };
+    const a=c("d1"), m=c("d3"), b=c("d4");
+    const lerp=(u,v,f)=>u+(v-u)*Math.min(1,Math.max(0,f));
+    let y=a.y, color="var(--blue)", wait=true;
+    if(s){
+      const t=Date.now();
+      if(t>=s.depT && t<s.arrT){ y=lerp(a.y,m.y,(t-s.depT)/(s.arrT-s.depT)); wait=false; }
+      else if(t>=s.arrT){
+        color="var(--orange)";
+        if(s.b1T && t<s.b1T){ y=lerp(m.y,b.y,(t-s.arrT)/(s.b1T-s.arrT)); wait=false; }
+        else y = s.b1T ? b.y : m.y;
+      }
+    }
+    tr.style.left=a.x+"px"; tr.style.top=y+"px";
+    tr.style.setProperty("--tc",color);
+    tr.classList.toggle("wait",wait);
+    if(!trainReady){ trainReady=true; requestAnimationFrame(()=>tr.classList.add("anim")); }
+  }
+
+  function syncLockUI(){
+    const on = !!lock;
+    $("lockBar").hidden = !on;
+    $("journey").classList.toggle("locked", on);
+    $("lockBtn").hidden = on;
+    $("unlockBtn").hidden = !on;
+    if(on) $("lockText").textContent = `已鎖定 ${fmt(lock.dep)} 發車的捷運班次，畫面不會再跳到下一班`;
+  }
+  $("lockBtn").addEventListener("click",()=>{
+    if(curDep===undefined) return;
+    setLock({dep:curDep, widx:curWidx, depEpoch: Date.now() + (curDep*60 - curNowSec)*1000});
+    render();
+  });
+  $("unlockBtn").addEventListener("click",()=>{ setLock(null); render(); });
+  $("depNext").addEventListener("click",e=>{
+    const b = e.target.closest("button[data-t]");
+    if(!b || lock) return;
+    pick = +b.dataset.t; render();
+  });
+
+  // ---- 目的站輸入 ----
+  const dl = $("stnList"), chips = $("chips");
+  STN.forEach(([name])=>{
+    const o = document.createElement("option"); o.value = name; dl.appendChild(o);
+    const b = document.createElement("button"); b.type="button"; b.textContent=name; b.dataset.n=name;
+    b.addEventListener("click",()=>{ pickDest(name); });
+    chips.appendChild(b);
+  });
+  function pickDest(txt){
+    const d = resolveDest(txt);
+    if(!d){ $("destHint").textContent = "找不到這個高鐵站。可輸入：台北、板橋、桃園、新竹、苗栗、台中、彰化、雲林、嘉義、台南、左營。"; return false; }
+    $("destHint").textContent = "";
+    cfg.dest = d.name; $("dest").value = d.name; saveCfg(); render(); return true;
+  }
+  $("goBtn").addEventListener("click",()=>pickDest($("dest").value));
+  $("dest").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); pickDest($("dest").value); $("dest").blur(); } });
+  $("dest").addEventListener("change",()=>{ if($("dest").value.trim()) pickDest($("dest").value); });
+  $("dest").addEventListener("input",()=>{
+    const d = resolveDest($("dest").value);
+    if(d && d.name===$("dest").value.trim()){ pickDest(d.name); }   // 從選單選到完整站名就直接查
+  });
+
+  // ---- 設定 ----
+  const fields = ["dayPick","walkMrt","ride","walk","mWd","mWe"];
+  function fill(){ fields.forEach(f=>$(f).value = cfg[f]); $("dest").value = (resolveDest(cfg.dest)||resolveDest(DEFAULTS.dest)).name; }
+  $("save").addEventListener("click",()=>{
+    fields.forEach(f=>{
+      const el=$(f); let v=el.value;
+      if(el.type==="number"){ const d = parseInt(v,10); v = Math.max(+el.min||0, Math.min(+el.max||99, isNaN(d)?DEFAULTS[f]:d)); el.value=v; }
+      cfg[f]=v;
+    });
+    $("savedMsg").textContent = saveCfg() ? "已儲存" : "已套用（這台裝置無法記住設定）";
+    render();
+  });
+  $("reset").addEventListener("click",()=>{
+    const d=cfg.dest; cfg = Object.assign({}, DEFAULTS, {dest:d}); fill(); saveCfg();
+    $("savedMsg").textContent="已恢復預設"; render();
+  });
+
+  fill(); render(); loadMetro(); loadThsr();
+  setInterval(render, 1000);
+})();
+</script>
+
+</body></html>

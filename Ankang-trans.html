@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>安康 ⇄ 十四張 ⇄ 板橋</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E6EAEE; --panel:#F7F9FA; --ink:#1C2630; --muted:#5E6B77; --rule:#C9D1D8;
+  --khaki:#B08A3E; --khaki-soft:#EADBB8; --yellow:#F2B705; --yellow-soft:#FBE7A6;
+  --warn:#9A3B1F;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161C22; --panel:#1F272F; --ink:#E9EEF2; --muted:#9AA7B3; --rule:#33404B;
+    --khaki:#D2AE62; --khaki-soft:#4A3D22; --yellow:#F7C631; --yellow-soft:#4D3F12; --warn:#F09A7A;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161C22; --panel:#1F272F; --ink:#E9EEF2; --muted:#9AA7B3; --rule:#33404B;
+  --khaki:#D2AE62; --khaki-soft:#4A3D22; --yellow:#F7C631; --yellow-soft:#4D3F12; --warn:#F09A7A;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  line-height:1.5;-webkit-font-smoothing:antialiased}
+.num{font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+main{max-width:30rem;margin:0 auto;padding:1.25rem 1.1rem 2.5rem}
+
+.clock{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem;margin-bottom:1rem}
+.clock .time{font-size:clamp(3.6rem,19vw,5.2rem);font-weight:700;line-height:.9}
+.clock .time .sec{font-size:.42em;color:var(--muted);font-weight:500;margin-left:.08em}
+.clock .date{text-align:right;color:var(--muted);font-size:.9rem;line-height:1.35}
+.daytype{display:inline-block;margin-top:.2rem;padding:.05rem .5rem;border-radius:.3rem;background:var(--panel);border:1px solid var(--rule);color:var(--ink);font-size:.8rem}
+
+/* direction switch */
+.dir{display:grid;grid-template-columns:1fr 1fr;gap:.3rem;padding:.3rem;margin-bottom:1rem;background:var(--panel);border:1px solid var(--rule);border-radius:.8rem}
+.dir button{border:0;border-radius:.55rem;padding:.55rem .4rem;background:transparent;color:var(--muted);font:inherit;font-size:.92rem;font-weight:500;cursor:pointer;line-height:1.3}
+.dir button small{display:block;font-size:.72rem;font-weight:400}
+.dir button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+
+.journey{background:var(--panel);border-radius:1rem;padding:1.1rem 1rem 1rem 0;border:1px solid var(--rule)}
+.stop{display:grid;grid-template-columns:3rem 1fr;position:relative}
+.rail{position:relative;display:flex;justify-content:center}
+.rail::before{content:"";position:absolute;top:0;bottom:0;width:.5rem;border-radius:.25rem;background:var(--c,var(--rule))}
+.stop.first .rail::before{top:.95rem}
+.stop.last .rail::before{bottom:auto;height:1.1rem}
+.dot{position:relative;z-index:1;width:1.35rem;height:1.35rem;margin-top:.35rem;border-radius:50%;background:var(--panel);border:.3rem solid var(--dotc,var(--ink))}
+.dot.xfer{width:1.6rem;height:1.6rem;margin-top:.25rem;border-color:var(--ink);border-width:.25rem}
+.body{padding:0 0 1.15rem}
+.stop.last .body{padding-bottom:0}
+.station{font-weight:700;font-size:1.08rem}
+.station small{font-weight:400;color:var(--muted);font-size:.8rem;margin-left:.35rem}
+.line-tag{display:inline-block;font-size:.75rem;padding:0 .45rem;border-radius:.25rem;margin-right:.35rem;vertical-align:.12em;font-weight:500;color:var(--ink)}
+.tag-k{background:var(--khaki-soft)}
+.tag-y{background:var(--yellow-soft)}
+.big{font-size:3.1rem;font-weight:700;line-height:1;margin:.25rem 0 .15rem}
+.mid{font-size:2.1rem;font-weight:600;line-height:1}
+.count{font-size:.95rem}
+.count b{font-weight:700}
+.note{font-size:.82rem;color:var(--muted)}
+.next-after{font-size:.85rem;color:var(--muted);margin-top:.2rem}
+.leg{font-size:.82rem;color:var(--muted);padding:.1rem 0 .9rem}
+.pair{display:flex;gap:1.5rem;margin:.3rem 0 .1rem}
+.pair .lbl{font-size:.75rem;color:var(--muted)}
+.est{font-size:.72rem;font-weight:400;color:var(--muted);border:1px solid var(--rule);border-radius:.25rem;padding:0 .3rem;margin-left:.35rem;vertical-align:.15em}
+.warn{color:var(--warn);font-size:.85rem;margin-top:.35rem}
+
+/* boarded lock */
+.actions{display:grid;margin-top:.9rem}
+.actions button{font:inherit;font-size:1.05rem;font-weight:700;padding:.85rem 1rem;border-radius:.8rem;border:0;cursor:pointer;background:var(--ink);color:var(--panel)}
+.actions button.restore{background:var(--panel);color:var(--ink);border:2px solid var(--ink)}
+.actions button:disabled{opacity:.4;cursor:not-allowed}
+.lockbar{display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem;padding:.6rem .9rem;border-radius:.7rem;background:var(--yellow-soft);font-size:.9rem;border:1px solid var(--yellow)}
+.dir button:disabled{cursor:not-allowed;opacity:.55}
+.journey.locked{border:2px solid var(--yellow)}
+.journey{position:relative}
+/* moving train icon on the rail */
+.train{position:absolute;left:0;top:0;width:2.1rem;height:2.1rem;transform:translate(-50%,-50%);z-index:3;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.train.anim{transition:top 1s linear,left .3s ease}
+.train svg{display:block;width:100%;height:100%}
+.train .tb{fill:var(--tc,var(--khaki));stroke:var(--ink);stroke-width:1.4}
+@media (prefers-reduced-motion:no-preference){
+  .train.wait svg{animation:bob 1.6s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-2px)}}
+}
+details{margin-top:1.25rem;background:var(--panel);border:1px solid var(--rule);border-radius:.8rem}
+summary{cursor:pointer;padding:.8rem 1rem;font-weight:500}
+summary:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--khaki);outline-offset:2px}
+.set{padding:0 1rem 1rem;display:grid;gap:.9rem}
+.grp{display:grid;gap:.9rem;padding-top:.8rem;border-top:1px solid var(--rule)}
+.grp h3{margin:0;font-size:.92rem}
+.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.6rem;font-size:.9rem}
+.row input[type=number],select{width:5.2rem;padding:.35rem .45rem;border-radius:.4rem;border:1px solid var(--rule);background:var(--bg);color:var(--ink);font:inherit}
+select{width:auto}
+label.blk{display:block;font-size:.9rem}
+label.blk span{display:block;color:var(--muted);font-size:.78rem;margin-bottom:.25rem}
+textarea{width:100%;min-height:4.5rem;padding:.5rem;border-radius:.4rem;border:1px solid var(--rule);background:var(--bg);color:var(--ink);font:.85rem/1.4 "Barlow Condensed","Arial Narrow",sans-serif;resize:vertical}
+.btns{display:flex;gap:.6rem;flex-wrap:wrap}
+.btns button{font:inherit;font-size:.88rem;padding:.45rem .9rem;border-radius:.45rem;border:1px solid var(--rule);background:var(--bg);color:var(--ink);cursor:pointer}
+.btns button.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.saved{font-size:.8rem;color:var(--muted);align-self:center}
+footer{margin-top:1rem;font-size:.75rem;color:var(--muted);line-height:1.6}
+@media (prefers-reduced-motion:no-preference){
+  .tick{animation:pulse 1s steps(1) infinite}
+  @keyframes pulse{50%{opacity:.35}}
+}
+.tsel{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.6rem 0 .2rem}
+.tsel label{font-size:.85rem;color:var(--muted)}
+.tsel input[type=time]{font:inherit;font-size:1.1rem;padding:.25rem .45rem;border-radius:.5rem;border:1px solid var(--rule);background:#fff;color:#1a1a1a;color-scheme:light}
+.tsel button{font:inherit;font-size:.85rem;cursor:pointer;padding:.3rem .7rem;border-radius:.5rem;border:1px solid var(--rule);background:#fff;color:#1a1a1a}
+.tsel button:disabled,.tsel input:disabled{opacity:.5;cursor:not-allowed}
+.tsel .tnote{font-size:.78rem;color:var(--muted);flex-basis:100%}
+.next-after{margin-top:.35rem}
+.nl{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.25rem}
+.nl-lbl{font-size:.75rem;color:var(--muted)}
+.nl-i{font:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;min-width:4.4rem;padding:.2rem .45rem;border-radius:.5rem;background:var(--bg);border:1px solid var(--rule);color:var(--ink);line-height:1.15}
+.nl-i b{font-size:1.25rem;font-weight:600}
+.nl-i small{font-size:.7rem;color:var(--muted)}
+.nl-i.cur{background:var(--s,var(--yellow-soft));border:2px solid var(--a,var(--ink));padding:calc(.2rem - 1px) calc(.45rem - 1px)}
+</style>
+</head>
+<body>
+<main>
+  <section class="clock" aria-label="現在時間">
+    <div class="time num" id="clock">--:--<span class="sec">--</span></div>
+    <div class="date"><div id="date">—</div><span class="daytype" id="daytype">—</span></div>
+  </section>
+
+  <div class="dir" role="group" aria-label="選擇方向">
+    <button type="button" data-dir="fwd">安康出發<small>往板橋</small></button>
+    <button type="button" data-dir="rev">板橋出發<small>回安康</small></button>
+  </div>
+
+  <div class="tsel">
+    <label for="depTime">出發時間</label>
+    <input type="time" id="depTime" step="60">
+    <button type="button" id="nowBtn">現在</button>
+    <span class="tnote" id="tselNote">即時：以現在時間查詢最近班次</span>
+  </div>
+
+  <div class="lockbar" id="lockBar" hidden>🔒 <span id="lockText"></span></div>
+
+  <section class="journey" id="journey" aria-live="polite">
+    <div class="train" id="train" aria-hidden="true">
+      <svg viewBox="0 0 32 32">
+        <rect class="tb" x="6" y="3" width="20" height="23" rx="6"/>
+        <rect x="9.5" y="7" width="13" height="8" rx="2" fill="var(--panel)" stroke="var(--ink)" stroke-width="1"/>
+        <circle cx="11" cy="20.5" r="1.8" fill="var(--panel)"/>
+        <circle cx="21" cy="20.5" r="1.8" fill="var(--panel)"/>
+        <path d="M10 26 L7 30 M22 26 L25 30" stroke="var(--ink)" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="stop first" id="s1">
+      <div class="rail"><div class="dot" id="d1"></div></div>
+      <div class="body">
+        <div class="station" id="st1"></div>
+        <div class="big num" id="dep">--:--</div>
+        <div class="count" id="depCount">—</div>
+        <div class="next-after" id="depNext"></div>
+        <div class="warn" id="depWarn" hidden></div>
+      </div>
+    </div>
+    <div class="stop" id="s2">
+      <div class="rail"></div>
+      <div class="leg" id="leg1"></div>
+    </div>
+    <div class="stop" id="s3">
+      <div class="rail"><div class="dot xfer" id="d3"></div></div>
+      <div class="body">
+        <div class="station">十四張<small>到站・轉乘</small></div>
+        <div class="mid num" id="arr">--:--</div>
+        <div class="note" id="xferNote"></div>
+      </div>
+    </div>
+    <div class="stop last" id="s4">
+      <div class="rail"><div class="dot" id="d4"></div></div>
+      <div class="body">
+        <div class="station" id="st4"></div>
+        <div class="pair">
+          <div><div class="lbl">第一班</div><div class="mid num" id="b1">--:--</div><div class="note" id="b1w"></div></div>
+          <div><div class="lbl">第二班</div><div class="mid num" id="b2">--:--</div><div class="note" id="b2w"></div></div>
+        </div>
+        <div class="warn" id="bWarn" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button type="button" id="lockBtn">鎖定目前畫面</button>
+    <button type="button" id="unlockBtn" class="restore" hidden>恢復即時顯示</button>
+  </div>
+
+  <details>
+    <summary>調整時間與時刻表</summary>
+    <div class="set">
+      <div class="row"><span>平日／假日</span>
+        <select id="dayMode"><option value="auto">自動（週六日為假日）</option><option value="wd">平日</option><option value="we">假日</option></select></div>
+      <div class="row"><span>環狀線尖峰班距（分）</span><input type="number" id="hwPeak" min="2" max="20"></div>
+      <div class="row"><span>環狀線離峰／假日班距（分）</span><input type="number" id="hwOff" min="2" max="30"></div>
+
+      <div class="grp" data-for="fwd">
+        <h3>安康出發 往板橋</h3>
+        <div class="row"><span>安康 → 十四張 乘車（分）</span><input type="number" id="ride" min="1" max="30"></div>
+        <div class="row"><span>轉乘步行到環狀線（分）</span><input type="number" id="walk" min="0" max="20"></div>
+        <div class="row"><span>十四張 → 板橋 乘車（分）</span><input type="number" id="rideYF" min="5" max="60"></div>
+        <label class="blk"><span>安康站往十四張・平日時刻</span><textarea id="kWd"></textarea></label>
+        <label class="blk"><span>安康站往十四張・假日時刻（空白則沿用平日）</span><textarea id="kWe" placeholder="06:00 06:15 …"></textarea></label>
+        <label class="blk"><span>環狀線十四張站往新北產業園區・平日</span><textarea id="yWd" placeholder="06:02 06:10 …"></textarea></label>
+        <label class="blk"><span>環狀線十四張站往新北產業園區・假日</span><textarea id="yWe" placeholder="06:02 06:12 …"></textarea></label>
+      </div>
+
+      <div class="grp" data-for="rev">
+        <h3>板橋出發 回安康</h3>
+        <div class="row"><span>板橋 → 十四張 乘車（分）</span><input type="number" id="rideY" min="5" max="60"></div>
+        <div class="row"><span>轉乘步行到輕軌（分）</span><input type="number" id="walkBack" min="0" max="20"></div>
+        <div class="row"><span>十四張 → 安康 乘車（分）</span><input type="number" id="rideK" min="1" max="30"></div>
+        <label class="blk"><span>環狀線板橋站往大坪林・平日</span><textarea id="yRWd" placeholder="06:00 06:08 …"></textarea></label>
+        <label class="blk"><span>環狀線板橋站往大坪林・假日</span><textarea id="yRWe" placeholder="06:00 06:10 …"></textarea></label>
+        <label class="blk"><span>十四張站往雙城／安康・平日時刻</span><textarea id="kRWd"></textarea></label>
+        <label class="blk"><span>十四張站往雙城／安康・假日時刻（空白則沿用平日）</span><textarea id="kRWe" placeholder="06:12 06:30 …"></textarea></label>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="save" type="button">儲存設定</button>
+        <button id="reset" type="button">恢復預設</button>
+        <span class="saved" id="savedMsg"></span>
+      </div>
+    </div>
+  </details>
+
+  <footer>
+    時間一律以台北時間計算。安坑輕軌時刻依新北捷運公司安康站時刻表（114年8月1日生效），十四張往安康由該表推算；環狀線依新北捷運公司十四張站、板橋站時刻表（114年8月1日生效）。若網站上有 TDX 每日抓取的時刻（tdx/metro.json），則優先使用 TDX 資料。實際以站內公告為準，設定區可修改。
+  </footer>
+</main>
+
+<script>
+(function(){
+  // 新北捷運公司 K06 安康站時刻表（114年8月1日生效），3 月台往十四張
+  let K_ANKANG_WD = "06:00 06:12 06:24 06:36 06:46 06:56 07:04 07:12 07:20 07:28 07:34 07:40 07:48 07:56 08:04 08:14 08:24 08:34 08:44 08:56 09:08 09:22 09:38 09:54 10:06 10:24 10:40 10:52 11:08 11:22 11:38 11:52 12:06 12:22 12:38 12:52 13:08 13:22 13:36 13:52 14:06 14:22 14:36 14:52 15:06 15:22 15:36 15:52 16:06 16:24 16:38 16:52 17:02 17:12 17:20 17:28 17:36 17:44 17:52 18:00 18:08 18:16 18:24 18:32 18:40 18:48 18:56 19:02 19:12 19:20 19:32 19:42 19:52 20:06 20:20 20:36 20:48 21:04 21:18 21:34 21:50 22:06 22:20 22:34 22:48 23:02 23:20 23:32 23:50 00:14";
+  let K_ANKANG_WE = "06:00 06:12 06:32 06:52 07:10 07:30 07:50 08:08 08:28 08:48 09:08 09:28 09:48 10:00 10:14 10:30 10:44 11:00 11:14 11:30 11:44 12:00 12:14 12:30 12:44 13:00 13:14 13:30 13:44 14:00 14:14 14:30 14:44 15:00 15:14 15:30 15:44 16:00 16:14 16:30 16:44 17:00 17:14 17:30 17:46 18:00 18:16 18:30 18:46 19:00 19:16 19:30 19:46 20:00 20:16 20:30 20:46 21:00 21:16 21:30 21:46 22:00 22:18 22:36 22:56 23:16 23:38 23:58 00:16";
+  // 十四張往安康：由 K06 安康站 1 月台往雙城時刻減去 8 分鐘推算（只開到安康的區間車不在該表中）
+  let K_SSZ_WD = "06:12 06:28 06:40 06:48 06:58 07:08 07:16 07:24 07:32 07:44 07:52 08:00 08:08 08:16 08:28 08:38 08:48 08:58 09:10 09:26 09:40 09:54 10:08 10:24 10:42 10:56 11:10 11:26 11:40 11:58 12:12 12:28 12:42 12:56 13:10 13:26 13:42 13:56 14:12 14:26 14:42 14:56 15:12 15:26 15:42 15:56 16:10 16:20 16:28 16:40 16:54 17:06 17:16 17:24 17:32 17:40 17:48 17:56 18:04 18:12 18:20 18:28 18:36 18:44 18:52 19:00 19:12 19:24 19:36 19:46 19:56 20:08 20:22 20:38 20:52 21:08 21:20 21:36 21:50 22:08 22:20 22:38 22:50 23:06 23:22 23:34 23:50 00:14";
+  let K_SSZ_WE = "06:12 06:30 06:50 07:10 07:28 07:48 08:08 08:28 08:48 09:08 09:28 09:48 10:04 10:20 10:34 10:50 11:04 11:20 11:34 11:50 12:04 12:20 12:34 12:50 13:04 13:20 13:34 13:50 14:04 14:20 14:34 14:50 15:04 15:20 15:34 15:50 16:04 16:20 16:34 16:50 17:04 17:20 17:34 17:50 18:02 18:18 18:32 18:48 19:02 19:18 19:32 19:48 20:02 20:18 20:32 20:48 21:02 21:18 21:32 21:48 22:02 22:16 22:36 22:56 23:18 23:36 23:58 00:14";
+  // 新北捷運公司 環狀線時刻表（114年8月1日生效）
+  // Y08 十四張 1月台往新北產業園區 / 2月台往大坪林；Y16 板橋 1月台往新北產業園區 / 2月台往大坪林
+  let Y_SZ_F_WD = "06:02 06:12 06:17 06:24 06:29 06:36 06:42 06:46 06:50 06:55 07:00 07:05 07:09 07:14 07:19 07:23 07:28 07:33 07:38 07:44 07:49 07:53 07:58 08:03 08:08 08:13 08:17 08:22 08:27 08:32 08:37 08:42 08:47 08:52 08:57 09:04 09:11 09:19 09:28 09:36 09:45 09:51 09:57 10:04 10:12 10:19 10:27 10:34 10:42 10:50 10:58 11:05 11:13 11:20 11:28 11:35 11:43 11:50 11:58 12:05 12:13 12:20 12:28 12:35 12:43 12:50 12:58 13:05 13:13 13:20 13:28 13:35 13:43 13:50 13:58 14:05 14:13 14:20 14:28 14:35 14:43 14:50 14:58 15:05 15:13 15:20 15:28 15:35 15:43 15:50 15:58 16:05 16:13 16:21 16:26 16:32 16:36 16:41 16:46 16:51 16:56 17:01 17:05 17:09 17:15 17:20 17:25 17:29 17:35 17:40 17:44 17:49 17:54 17:59 18:04 18:08 18:13 18:17 18:22 18:27 18:32 18:38 18:43 18:48 18:52 18:57 19:02 19:06 19:11 19:16 19:21 19:26 19:33 19:42 19:53 20:03 20:12 20:22 20:32 20:41 20:51 21:01 21:11 21:21 21:31 21:41 21:52 22:02 22:12 22:22 22:32 22:40 22:50 23:00 23:06 23:14 23:27 23:38 23:51 00:02";
+  let Y_SZ_F_WE = "06:02 06:12 06:19 06:29 06:37 06:44 06:52 07:01 07:11 07:21 07:32 07:42 07:52 08:02 08:13 08:22 08:32 08:42 08:52 09:02 09:11 09:20 09:28 09:36 09:43 09:50 09:58 10:05 10:13 10:20 10:28 10:35 10:43 10:50 10:58 11:05 11:13 11:20 11:28 11:35 11:43 11:50 11:58 12:05 12:13 12:20 12:28 12:35 12:43 12:50 12:58 13:05 13:13 13:20 13:28 13:35 13:43 13:50 13:58 14:05 14:13 14:20 14:28 14:35 14:43 14:50 14:58 15:05 15:13 15:20 15:28 15:35 15:43 15:50 15:58 16:05 16:13 16:20 16:28 16:35 16:43 16:50 16:58 17:06 17:13 17:21 17:28 17:36 17:44 17:52 18:03 18:13 18:22 18:33 18:43 18:53 19:03 19:12 19:22 19:32 19:42 19:52 20:02 20:12 20:22 20:32 20:42 20:52 21:02 21:12 21:22 21:32 21:42 21:52 22:02 22:12 22:22 22:32 22:42 22:51 23:00 23:06 23:14 23:27 23:38 23:51 00:02";
+  let Y_SZ_B_WD = "06:05 06:14 06:23 06:30 06:35 06:44 06:49 06:56 07:03 07:12 07:17 07:22 07:28 07:33 07:38 07:43 07:48 07:53 07:57 08:02 08:07 08:11 08:16 08:21 08:26 08:31 08:37 08:42 08:46 08:51 08:56 09:01 09:05 09:10 09:13 09:20 09:24 09:29 09:34 09:39 09:45 09:50 09:57 10:04 10:12 10:19 10:27 10:36 10:44 10:49 10:57 11:04 11:12 11:19 11:27 11:34 11:42 11:49 11:57 12:04 12:12 12:19 12:27 12:34 12:42 12:49 12:57 13:04 13:12 13:19 13:27 13:34 13:42 13:49 13:57 14:04 14:12 14:19 14:27 14:34 14:42 14:49 14:57 15:04 15:12 15:19 15:27 15:34 15:42 15:49 15:57 16:04 16:12 16:19 16:27 16:35 16:42 16:50 16:57 17:04 17:11 17:19 17:24 17:29 17:34 17:39 17:44 17:48 17:53 17:58 18:02 18:07 18:12 18:17 18:21 18:26 18:33 18:37 18:42 18:47 18:52 18:56 19:01 19:05 19:10 19:15 19:20 19:25 19:29 19:36 19:41 19:45 19:50 19:55 19:59 20:04 20:09 20:13 20:21 20:31 20:40 20:51 21:01 21:11 21:21 21:31 21:41 21:51 22:01 22:11 22:21 22:31 22:41 22:50 22:58 23:07 23:17 23:27 23:38 23:46 23:54 00:02 00:10 00:18 00:30";
+  let Y_SZ_B_WE = "06:05 06:13 06:22 06:30 06:35 06:42 06:51 06:59 07:09 07:20 07:30 07:40 07:50 08:00 08:11 08:21 08:31 08:41 08:51 09:01 09:11 09:21 09:31 09:41 09:50 09:59 10:05 10:12 10:20 10:27 10:35 10:42 10:50 10:57 11:05 11:12 11:20 11:27 11:35 11:42 11:50 11:57 12:05 12:12 12:20 12:27 12:35 12:42 12:50 12:57 13:05 13:12 13:20 13:27 13:35 13:42 13:50 13:57 14:05 14:12 14:20 14:27 14:35 14:42 14:50 14:57 15:05 15:12 15:20 15:27 15:35 15:42 15:50 15:57 16:05 16:12 16:20 16:27 16:35 16:42 16:50 16:57 17:05 17:12 17:20 17:27 17:35 17:42 17:51 17:58 18:06 18:14 18:21 18:31 18:41 18:51 19:01 19:11 19:21 19:31 19:41 19:51 20:01 20:11 20:21 20:31 20:41 20:51 21:01 21:11 21:21 21:31 21:41 21:51 22:01 22:11 22:21 22:31 22:40 22:49 22:58 23:07 23:17 23:27 23:38 23:46 23:54 00:02 00:10 00:18 00:30";
+  let Y_BQ_F_WD = "06:00 06:07 06:16 06:23 06:32 06:37 06:42 06:47 06:54 07:00 07:03 07:08 07:13 07:17 07:22 07:27 07:32 07:36 07:41 07:46 07:51 07:56 08:02 08:06 08:11 08:16 08:21 08:26 08:30 08:35 08:39 08:45 08:49 08:55 09:00 09:05 09:10 09:15 09:22 09:29 09:37 09:45 09:54 10:02 10:09 10:15 10:22 10:29 10:37 10:44 10:52 11:00 11:08 11:16 11:23 11:31 11:38 11:46 11:53 12:01 12:08 12:16 12:23 12:31 12:38 12:46 12:53 13:01 13:08 13:16 13:23 13:31 13:38 13:46 13:53 14:01 14:08 14:16 14:23 14:31 14:38 14:46 14:53 15:01 15:08 15:16 15:23 15:31 15:38 15:46 15:53 16:01 16:08 16:16 16:23 16:31 16:38 16:44 16:50 16:54 16:59 17:04 17:09 17:14 17:19 17:23 17:27 17:33 17:37 17:42 17:47 17:53 17:57 18:02 18:07 18:12 18:16 18:21 18:26 18:30 18:35 18:40 18:45 18:49 18:56 19:01 19:06 19:10 19:15 19:20 19:24 19:29 19:34 19:39 19:44 19:52 20:01 20:12 20:22 20:31 20:41 20:51 21:00 21:10 21:20 21:30 21:40 21:50 22:00 22:11 22:21 22:31 22:41 22:51 22:59 23:09 23:19 23:26 23:34 23:47 23:58 00:11 00:22";
+  let Y_BQ_F_WE = "06:00 06:07 06:16 06:22 06:32 06:39 06:48 06:57 07:04 07:11 07:20 07:30 07:40 07:51 08:01 08:11 08:21 08:32 08:41 08:51 09:01 09:11 09:21 09:30 09:39 09:47 09:55 10:01 10:08 10:16 10:23 10:31 10:38 10:46 10:53 11:01 11:08 11:16 11:23 11:31 11:38 11:46 11:53 12:01 12:08 12:16 12:23 12:31 12:38 12:46 12:53 13:01 13:08 13:16 13:23 13:31 13:38 13:46 13:53 14:01 14:08 14:16 14:23 14:31 14:38 14:46 14:53 15:01 15:08 15:16 15:23 15:31 15:38 15:46 15:53 16:01 16:08 16:16 16:23 16:31 16:38 16:46 16:53 17:01 17:08 17:16 17:23 17:31 17:38 17:46 17:53 18:02 18:11 18:22 18:32 18:41 18:52 19:02 19:12 19:22 19:31 19:41 19:51 20:01 20:11 20:21 20:31 20:41 20:51 21:01 21:11 21:21 21:31 21:41 21:51 22:01 22:11 22:21 22:31 22:41 22:51 23:01 23:10 23:19 23:26 23:34 23:47 23:58 00:11 00:22";
+  let Y_BQ_B_WD = "06:03 06:11 06:16 06:24 06:32 06:38 06:46 06:54 07:00 07:04 07:10 07:15 07:21 07:26 07:30 07:35 07:40 07:45 07:49 07:54 07:58 08:04 08:09 08:14 08:19 08:24 08:29 08:34 08:39 08:43 08:48 08:52 08:56 09:02 09:07 09:12 09:17 09:22 09:28 09:33 09:39 09:47 09:54 10:02 10:10 10:18 10:27 10:32 10:39 10:47 10:54 11:02 11:09 11:17 11:24 11:32 11:39 11:47 11:54 12:02 12:09 12:17 12:24 12:32 12:39 12:47 12:54 13:02 13:09 13:17 13:24 13:32 13:39 13:47 13:54 14:02 14:09 14:17 14:24 14:32 14:39 14:47 14:54 15:02 15:09 15:17 15:24 15:32 15:39 15:47 15:54 16:02 16:09 16:17 16:25 16:32 16:40 16:46 16:54 17:01 17:06 17:12 17:17 17:21 17:26 17:31 17:36 17:40 17:45 17:50 17:54 17:59 18:04 18:09 18:15 18:20 18:25 18:29 18:34 18:39 18:43 18:48 18:53 18:58 19:02 19:07 19:12 19:18 19:23 19:28 19:33 19:37 19:42 19:46 19:51 19:56 20:03 20:11 20:20 20:30 20:40 20:50 21:00 21:10 21:20 21:30 21:40 21:50 22:00 22:10 22:20 22:30 22:38 22:47 22:57 23:07 23:18 23:26 23:34 23:42 23:50 23:59 00:11";
+  let Y_BQ_B_WE = "06:08 06:19 06:29 06:39 06:50 07:00 07:10 07:20 07:30 07:40 07:50 08:00 08:10 08:20 08:29 08:38 08:46 08:55 09:03 09:10 09:18 09:25 09:33 09:40 09:48 09:55 10:03 10:10 10:18 10:25 10:33 10:40 10:48 10:55 11:03 11:10 11:18 11:25 11:33 11:40 11:48 11:55 12:03 12:10 12:18 12:25 12:33 12:40 12:48 12:55 13:03 13:10 13:18 13:25 13:33 13:40 13:48 13:55 14:03 14:10 14:18 14:25 14:33 14:40 14:48 14:55 15:03 15:10 15:18 15:25 15:33 15:40 15:48 15:55 16:03 16:10 16:18 16:25 16:33 16:40 16:48 16:55 17:03 17:10 17:18 17:25 17:34 17:41 17:47 17:54 18:00 18:10 18:20 18:30 18:40 18:50 19:00 19:10 19:20 19:30 19:40 19:50 20:00 20:10 20:20 20:30 20:40 20:50 21:00 21:10 21:20 21:30 21:40 21:50 22:00 22:10 22:20 22:29 22:38 22:47 22:57 23:07 23:18 23:26 23:34 23:42 23:50 23:59 00:11";
+  const DEFAULTS = {dir:"fwd",dayMode:"auto",hwPeak:6,hwOff:9,
+    ride:9,walk:3,rideYF:18,kWd:K_ANKANG_WD,kWe:K_ANKANG_WE,yWd:Y_SZ_F_WD,yWe:Y_SZ_F_WE,
+    rideY:17,walkBack:3,rideK:8,yRWd:Y_BQ_B_WD,yRWe:Y_BQ_B_WE,kRWd:K_SSZ_WD,kRWe:K_SSZ_WE};
+  let MT_SRC = "";   // TDX 時刻更新時間（空白＝使用內建時刻）
+  const KEY = "ankang-transfer-v3";
+  let cfg = Object.assign({}, DEFAULTS);
+  try{
+    const s = localStorage.getItem(KEY);
+    if(s) cfg = Object.assign(cfg, JSON.parse(s));
+    else{
+      // migrate v1: keep personal settings, drop old light-rail timetables (replaced by 114/8/1 official ones)
+      // migrate older versions: keep personal settings, drop timetables and circular ride times (route changed to 板橋)
+      const o = localStorage.getItem("ankang-transfer-v2") || localStorage.getItem("ankang-transfer-v1");
+      if(o){ const v = JSON.parse(o); ["kWd","kWe","kRWd","kRWe","yWd","yWe","yRWd","yRWe","rideYF","rideY"].forEach(k=>delete v[k]); cfg = Object.assign(cfg, v); }
+    }
+  }catch(e){}
+
+  // ---- boarded lock: {dir, dep(service-day minutes), holiday, depEpoch(ms)} ----
+  const LOCK_KEY = "ankang-transfer-lock-v2";
+  let lock = null, chosen = null, pickedMin = null;   // chosen＝使用者點選的首段發車時間（分鐘），不存檔
+  try{ const s = localStorage.getItem(LOCK_KEY); if(s) lock = JSON.parse(s); }catch(e){}
+  if(lock) cfg.dir = lock.dir;
+  let curDep, curHoliday, curNowSec;   // what the live screen is showing, for the lock button
+  function setLock(v){
+    lock = v;
+    try{ v ? localStorage.setItem(LOCK_KEY, JSON.stringify(v)) : localStorage.removeItem(LOCK_KEY); }catch(e){}
+  }
+
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2,"0");
+  const WEEK = ["日","一","二","三","四","五","六"];
+
+  function taipeiNow(){
+    const parts = new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Taipei",month:"2-digit",day:"2-digit",weekday:"short",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
+    const o = {}; parts.forEach(p=>o[p.type]=p.value);
+    const wd = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6}[o.weekday];
+    const h=+o.hour, m=+o.minute, s=+o.second;
+    let svcSec = h*3600+m*60+s, svcWd = wd;
+    if(h<3){ svcSec += 86400; svcWd = (wd+6)%7; }
+    return {h,m,s,mo:+o.month,d:+o.day,wd,svcSec,svcWd};
+  }
+  function parseTimes(txt){
+    const out = [];
+    ((txt||"").match(/\d{1,2}[:：]\d{2}/g)||[]).forEach(t=>{
+      let [h,m] = t.split(/[:：]/).map(Number);
+      if(h<3) h+=24;
+      out.push(h*60+m);
+    });
+    return [...new Set(out)].sort((a,b)=>a-b);
+  }
+  // headway estimate; first/last in minutes from service-day start
+  function genCircular(first,last,holiday){
+    const out=[]; let t=first;
+    while(t<=last){
+      out.push(t);
+      const peak = !holiday && ((t>=420&&t<540)||(t>=1020&&t<1170));
+      t += peak ? +cfg.hwPeak : +cfg.hwOff;
+    }
+    if(out[out.length-1]!==last) out.push(last);
+    return out;
+  }
+  const fmt = min => pad(Math.floor(min/60)%24)+":"+pad(min%60);
+  function countdown(sec){
+    if(sec<=0) return "<b>即將發車</b>";
+    const m=Math.floor(sec/60), s=sec%60;
+    return m>=60 ? `還有 <b>${Math.floor(m/60)} 小時 ${m%60} 分</b>` : `還有 <b>${m} 分 ${pad(s)} 秒</b>`;
+  }
+  const TAG_K = '<span class="line-tag tag-k">安坑輕軌</span>';
+  const TAG_Y = '<span class="line-tag tag-y">環狀線</span>';
+  const EST = '<span class="est">估算</span>';
+
+  function pick(wd,we,holiday){
+    const w = parseTimes(we);
+    return {list: holiday && w.length ? w : parseTimes(wd), fallback: holiday && !w.length};
+  }
+
+  // Find the same train at the next station: first time in list within [dep+ride-2, dep+ride+4]; else dep+ride
+  function matchArr(dep, ride, list){
+    const hit = list && list.find(t => t >= dep+ride-2 && t <= dep+ride+4);
+    return hit!==undefined ? hit : dep+ride;
+  }
+
+  function plan(holiday){
+    if(cfg.dir==="fwd"){
+      const k = pick(cfg.kWd,cfg.kWe,holiday);
+      const yp = parseTimes(holiday?cfg.yWe:cfg.yWd);
+      return {
+        aColor:"var(--khaki)", bColor:"var(--yellow)",
+        aTitle:`${TAG_K}安康<small>往十四張</small>`,
+        bTitle:`${TAG_Y}十四張<small>往新北產業園區・板橋下車</small>${yp.length?"":EST}`,
+        aList:k.list, aFallback:k.fallback, aEst:false,
+        bList: yp.length ? yp : genCircular(6*60+2, 24*60+2, holiday),
+        ride:+cfg.ride, walk:+cfg.walk, rideB:+cfg.rideYF,
+        arrOf: dep => dep + +cfg.ride,
+        destOf: t => matchArr(t, +cfg.rideYF, parseTimes(holiday?Y_BQ_F_WE:Y_BQ_F_WD)),
+        walkText:"走到環狀線月台", destName:"板橋",
+        lastMsg:"趕不上環狀線末班車（約 00:02），請改搭其他交通工具。"
+      };
+    }
+    const yp = parseTimes(holiday?cfg.yRWe:cfg.yRWd);
+    const k = pick(cfg.kRWd,cfg.kRWe,holiday);
+    return {
+      aColor:"var(--yellow)", bColor:"var(--khaki)",
+      aTitle:`${TAG_Y}板橋<small>往大坪林</small>${yp.length?"":EST}`,
+      bTitle:`${TAG_K}十四張<small>往雙城／安康</small>`,
+      aList: yp.length ? yp : genCircular(6*60, 24*60, holiday), aFallback:false, aEst:!yp.length,
+      bList:k.list, bFallback:k.fallback,
+      ride:+cfg.rideY, walk:+cfg.walkBack, rideB:+cfg.rideK,
+      arrOf: dep => matchArr(dep, +cfg.rideY, parseTimes(holiday?Y_SZ_B_WE:Y_SZ_B_WD)),
+      destOf: t => t + +cfg.rideK,
+      walkText:"走到輕軌月台", destName:"安康",
+      lastMsg:"趕不上輕軌末班車（約 00:08），請改搭其他交通工具。"
+    };
+  }
+
+  function render(){
+    const n = taipeiNow();
+    $("clock").innerHTML = `${pad(n.h)}<span class="tick">:</span>${pad(n.m)}<span class="sec">${pad(n.s)}</span>`;
+    $("date").textContent = `${n.mo} 月 ${n.d} 日（${WEEK[n.wd]}）`;
+    // lock auto-expires 6 h after the locked departure
+    if(lock && Date.now() > lock.depEpoch + 6*3600e3) setLock(null);
+    let holiday = cfg.dayMode==="we" || (cfg.dayMode==="auto" && (n.svcWd===0||n.svcWd===6));
+    if(lock) holiday = lock.holiday;
+    syncLockUI();
+    $("daytype").textContent = (holiday ? "假日時刻" : "平日時刻") + (MT_SRC ? `・TDX（${MT_SRC}）` : "・內建時刻");
+
+    const p = plan(holiday);
+    $("s1").style.setProperty("--c",p.aColor); $("d1").style.setProperty("--dotc",p.aColor);
+    $("s2").style.setProperty("--c",p.aColor);
+    $("s3").style.setProperty("--c",p.bColor); $("s4").style.setProperty("--c",p.bColor);
+    $("d4").style.setProperty("--dotc",p.bColor);
+    $("d3").style.background = `linear-gradient(90deg,${p.aColor} 50%,${p.bColor} 50%)`;
+    $("st1").innerHTML = p.aTitle; $("st4").innerHTML = p.bTitle;
+    $("leg1").textContent = `乘車約 ${p.ride} 分鐘`;
+    $("xferNote").textContent = `${p.walkText}約 ${p.walk} 分鐘`;
+
+    const warnA = $("depWarn"), warnB = $("bWarn");
+    warnA.hidden = true; warnB.hidden = true;
+    // 查詢基準時間：有選出發時間就用它（秒＝0），否則用現在
+    const picked = pickedMin!==null && !lock;
+    const refSec = picked ? pickedMin*60 : n.svcSec;
+    $("tselNote").textContent = picked
+      ? `以 ${fmt(pickedMin)} 為出發時間查詢（捷運接駁時間依此推算；平日／假日仍依今天判斷）`
+      : "即時：以現在時間查詢最近班次";
+    const autoDep = p.aList.find(t => t*60+59 >= refSec);          // 最近一班
+    const fiveAll = autoDep===undefined ? [] : p.aList.slice(p.aList.indexOf(autoDep), p.aList.indexOf(autoDep)+5);
+    if(chosen!==null && !fiveAll.includes(chosen)) chosen = null;    // 選的那班已開走就回到最近一班
+    const dep = lock ? lock.dep : (chosen!==null ? chosen : autoDep);
+    curDep = dep; curHoliday = holiday; curNowSec = n.svcSec;
+    $("lockBtn").disabled = dep===undefined;
+    const clearB = () => { ["b1","b2"].forEach(id=>$(id).textContent="--:--"); ["b1w","b2w"].forEach(id=>$(id).textContent=""); };
+
+    if(dep===undefined){
+      $("dep").textContent="--:--";
+      $("depCount").innerHTML="今天末班已開走";
+      $("depNext").textContent = p.aList.length ? `明天首班 ${fmt(p.aList[0])}` : ""; $("depNext")._h = null;
+      $("arr").textContent="--:--"; clearB(); placeTrain(null,p); return;
+    }
+    const idx = p.aList.indexOf(dep);
+    $("dep").textContent = fmt(dep);
+    const arr = p.arrOf(dep);
+    $("leg1").textContent = `乘車約 ${arr-dep} 分鐘`;
+    if(lock){
+      // count down to arrival at 十四張 using absolute time, safe across midnight
+      const remain = Math.round((lock.depEpoch + (arr-dep)*60000 - Date.now())/1000);
+      $("depCount").innerHTML = remain>0
+        ? `已上車・約 <b>${Math.floor(remain/60)} 分 ${pad(remain%60)} 秒</b>後到十四張`
+        : "<b>已抵達十四張</b>";
+      $("depNext").textContent = ""; $("depNext")._h = null;
+    }else{
+      const realLeft = dep*60 - n.svcSec;
+      $("depCount").innerHTML = (picked && realLeft < -59) ? "此班現在已開走（僅供參考）" : countdown(realLeft);
+      const five = fiveAll;
+      const soft = cfg.dir==="fwd" ? "var(--khaki-soft)" : "var(--yellow-soft)";
+      const nhtml = `<div class="nl-lbl">接下來 ${five.length} 班・點選要搭的班次</div><div class="nl">` +
+        five.map(t=>`<button type="button" class="nl-i${t===dep?" cur":""}" data-t="${t}" style="--s:${soft};--a:${p.aColor}" aria-pressed="${t===dep}"><b class="num">${fmt(t)}</b><small>${(t*60-n.svcSec) < -59 ? "已開走" : Math.max(0,Math.floor((t*60-n.svcSec)/60))+" 分後"}</small><small>${fmt(p.arrOf(t))} 到十四張</small></button>`).join("") +
+        `</div>` + (five.length<5 ? `<div class="nl-lbl">之後沒有更多班次</div>` : "");
+      // 內容沒變就不重畫，避免每秒重繪吃掉點擊
+      if($("depNext")._h !== nhtml){ $("depNext").innerHTML = nhtml; $("depNext")._h = nhtml; }
+    }
+    if(p.aFallback){ warnA.hidden=false; warnA.textContent="假日時刻尚未填入，目前沿用平日時刻，班次可能不同。"; }
+
+    $("arr").textContent = fmt(arr);
+    const ready = arr + p.walk;
+    const bs = p.bList.filter(t => t >= ready).slice(0,2);
+    [["b1","b1w"],["b2","b2w"]].forEach(([a,b],i)=>{
+      if(bs[i]!==undefined){
+        $(a).textContent = fmt(bs[i]);
+        $(b).textContent = `等 ${bs[i]-arr} 分・約 ${fmt(p.destOf(bs[i]))} 到${p.destName}`;
+      }else{ $(a).textContent="--:--"; $(b).textContent=""; }
+    });
+    const msgs=[];
+    if(bs.length<2) msgs.push(bs.length ? "之後就沒有車了。" : p.lastMsg);
+    if(p.bFallback) msgs.push("假日時刻尚未填入，目前沿用平日時刻。");
+    if(msgs.length){ warnB.hidden=false; warnB.textContent=msgs.join(" "); }
+    // timeline for the train icon (only moves when boarded/locked)
+    placeTrain(lock ? {
+      depT: lock.depEpoch,
+      arrT: lock.depEpoch + (arr-dep)*60000,
+      b1T: bs[0]!==undefined ? lock.depEpoch + (bs[0]-dep)*60000 : null
+    } : null, p);
+  }
+
+  // Position = interpolate between dot centres:
+  //   before dep → at origin; dep→arr → origin→十四張; arr→next train → 十四張→轉乘月台; after → stays at 轉乘月台
+  let trainReady = false;
+  function placeTrain(s,p){
+    const tr = $("train"), box = $("journey").getBoundingClientRect();
+    const c = id => { const r=$(id).getBoundingClientRect(); return {x:r.left+r.width/2-box.left, y:r.top+r.height/2-box.top}; };
+    const a=c("d1"), m=c("d3"), b=c("d4");
+    const lerp=(u,v,f)=>u+(v-u)*Math.min(1,Math.max(0,f));
+    let y=a.y, color=p.aColor, wait=true;
+    if(s){
+      const t=Date.now();
+      if(t>=s.depT && t<s.arrT){ y=lerp(a.y,m.y,(t-s.depT)/(s.arrT-s.depT)); wait=false; }
+      else if(t>=s.arrT){
+        color=p.bColor;
+        if(s.b1T && t<s.b1T){ y=lerp(m.y,b.y,(t-s.arrT)/(s.b1T-s.arrT)); wait=false; }
+        else y = s.b1T ? b.y : m.y;
+      }
+    }
+    tr.style.left=a.x+"px"; tr.style.top=y+"px";
+    tr.style.setProperty("--tc",color);
+    tr.classList.toggle("wait",wait);
+    if(!trainReady){ trainReady=true; requestAnimationFrame(()=>tr.classList.add("anim")); }
+  }
+
+  function syncLockUI(){
+    const on = !!lock;
+    $("lockBar").hidden = !on;
+    $("journey").classList.toggle("locked", on);
+    $("lockBtn").hidden = on;
+    $("unlockBtn").hidden = !on;
+    document.querySelectorAll(".dir button").forEach(b=>b.disabled = on);
+    $("depTime").disabled = on; $("nowBtn").disabled = on;
+    if(on) $("lockText").textContent = `已鎖定 ${fmt(lock.dep)} 發車的班次，畫面不會再跳到下一班`;
+  }
+  $("lockBtn").addEventListener("click",()=>{
+    if(curDep===undefined) return;
+    setLock({dir:cfg.dir, dep:curDep, holiday:curHoliday,
+             depEpoch: Date.now() + (curDep*60 - curNowSec)*1000});
+    render();
+  });
+  $("unlockBtn").addEventListener("click",()=>{ setLock(null); render(); });
+  $("depNext").addEventListener("click",e=>{
+    const b = e.target.closest("button[data-t]");
+    if(!b || lock) return;
+    chosen = +b.dataset.t; render();
+  });
+
+  // 出發時間選擇：pickedMin＝營運日分鐘（00:00–02:59 視為 24:00 之後），null＝即時；不存檔
+  $("depTime").addEventListener("input",e=>{
+    const v = e.target.value;
+    if(!v){ pickedMin = null; }
+    else{ let [h,m] = v.split(":").map(Number); if(h<3) h+=24; pickedMin = h*60+m; }
+    chosen = null; render();
+  });
+  $("nowBtn").addEventListener("click",()=>{ pickedMin = null; chosen = null; $("depTime").value = ""; render(); });
+
+  // direction switch
+  const dirBtns = document.querySelectorAll(".dir button");
+  function syncDir(){
+    dirBtns.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.dir===cfg.dir)));
+    document.querySelectorAll(".grp").forEach(g=>g.hidden = g.dataset.for!==cfg.dir);
+  }
+  dirBtns.forEach(b=>b.addEventListener("click",()=>{
+    if(lock) return;
+    cfg.dir=b.dataset.dir; chosen=null; syncDir(); render();
+    try{ localStorage.setItem(KEY, JSON.stringify(cfg)); }catch(e){}
+  }));
+
+  const fields = ["dayMode","hwPeak","hwOff","ride","walk","rideYF","kWd","kWe","yWd","yWe","rideY","walkBack","rideK","yRWd","yRWe","kRWd","kRWe"];
+  function fill(){ fields.forEach(f=>$(f).value = cfg[f]); }
+  $("save").addEventListener("click",()=>{
+    fields.forEach(f=>{
+      const el=$(f); let v=el.value;
+      if(el.type==="number"){ v = Math.max(+el.min||0, Math.min(+el.max||99, parseInt(v,10)||DEFAULTS[f])); el.value=v; }
+      cfg[f]=v;
+    });
+    if(!parseTimes(cfg.kWd).length){ cfg.kWd=K_ANKANG_WD; $("kWd").value=cfg.kWd; }
+    if(!parseTimes(cfg.kRWd).length){ cfg.kRWd=K_SSZ_WD; $("kRWd").value=cfg.kRWd; }
+    try{ localStorage.setItem(KEY, JSON.stringify(cfg)); $("savedMsg").textContent="已儲存"; }
+    catch(e){ $("savedMsg").textContent="已套用（這台裝置無法記住設定）"; }
+    render();
+  });
+  $("reset").addEventListener("click",()=>{
+    const d=cfg.dir; cfg = Object.assign({}, DEFAULTS, {dir:d}); fill();
+    try{ localStorage.setItem(KEY, JSON.stringify(cfg)); }catch(e){}
+    $("savedMsg").textContent="已恢復預設"; render();
+  });
+
+  fill(); syncDir(); render();
+  // ---- TDX 時刻（GitHub Actions 每天抓好放在同一個網站的 tdx/metro.json）----
+  // 有抓到的就取代內建時刻；你在設定區自行改過的時刻（與內建不同）會保留不動。
+  // 抓不到（claude.ai 預覽、離線、Actions 失敗）就沿用內建時刻。
+  fetch("tdx/metro.json", {cache:"no-cache"}).then(r=>r.ok?r.json():null).then(j=>{
+    if(!j) return;
+    const map = [   // [JSON 鍵, 平日變數名, 假日變數名, 設定欄位(平日), 設定欄位(假日)]
+      ["K_ANKANG","K_ANKANG_WD","K_ANKANG_WE","kWd","kWe"],
+      ["K_SSZ","K_SSZ_WD","K_SSZ_WE","kRWd","kRWe"],
+      ["Y_SZ_F","Y_SZ_F_WD","Y_SZ_F_WE","yWd","yWe"],
+      ["Y_SZ_B","Y_SZ_B_WD","Y_SZ_B_WE",null,null],
+      ["Y_BQ_F","Y_BQ_F_WD","Y_BQ_F_WE",null,null],
+      ["Y_BQ_B","Y_BQ_B_WD","Y_BQ_B_WE","yRWd","yRWe"],
+    ];
+    const VARS = {
+      get:n=>({K_ANKANG_WD,K_ANKANG_WE,K_SSZ_WD,K_SSZ_WE,Y_SZ_F_WD,Y_SZ_F_WE,Y_SZ_B_WD,Y_SZ_B_WE,Y_BQ_F_WD,Y_BQ_F_WE,Y_BQ_B_WD,Y_BQ_B_WE})[n],
+      set:(n,v)=>{ switch(n){
+        case "K_ANKANG_WD":K_ANKANG_WD=v;break; case "K_ANKANG_WE":K_ANKANG_WE=v;break;
+        case "K_SSZ_WD":K_SSZ_WD=v;break; case "K_SSZ_WE":K_SSZ_WE=v;break;
+        case "Y_SZ_F_WD":Y_SZ_F_WD=v;break; case "Y_SZ_F_WE":Y_SZ_F_WE=v;break;
+        case "Y_SZ_B_WD":Y_SZ_B_WD=v;break; case "Y_SZ_B_WE":Y_SZ_B_WE=v;break;
+        case "Y_BQ_F_WD":Y_BQ_F_WD=v;break; case "Y_BQ_F_WE":Y_BQ_F_WE=v;break;
+        case "Y_BQ_B_WD":Y_BQ_B_WD=v;break; case "Y_BQ_B_WE":Y_BQ_B_WE=v;break; } }
+    };
+    let n = 0;
+    map.forEach(([k,vw,ve,cw,ce])=>{
+      const d = j[k]; if(!d) return;
+      [[d.wd,vw,cw],[d.we,ve,ce]].forEach(([api,vn,cf])=>{
+        if(!api || parseTimes(api).length < 10) return;          // 資料太少視為異常，不採用
+        const old = VARS.get(vn);
+        if(cf){ if(cfg[cf]===old) cfg[cf]=api; DEFAULTS[cf]=api; }  // 未自訂才套用；恢復預設也改用 TDX
+        VARS.set(vn, api); n++;
+      });
+    });
+    if(n){ MT_SRC = (j.updated||"") + " 更新"; if(typeof fill==="function") fill(); render(); }
+  }).catch(()=>{});
+  setInterval(render, 1000);
+})();
+</script>
+</body>
+</html>

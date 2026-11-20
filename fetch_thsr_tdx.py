@@ -17,6 +17,10 @@
   空白 = 不在該車路線範圍，"-" = 通過不停。
   中間站取「發車時間」、終點站取「到站時間」，與 index.html 的 TT_IS_DEPARTURE=true 假設一致。
 
+另外輸出（供轉乘看板使用）：
+  tdx/thsr-full/YYYY-MM-DD.json  高鐵每車各站 [站碼, 到站, 發車]（Nagang-trans 用）
+  tdx/metro.json                 捷運／輕軌指定車站的平日、假日發車時刻（Ankang-trans、Nagang-trans 用）
+
 只用 Python 標準函式庫，不需安裝任何套件。
 """
 import json
@@ -99,6 +103,80 @@ def to_row(train):
     return d, f"{no};;{','.join(cols)}", stops[0].get("DepartureTime", "")
 
 
+# ---------------- 捷運／輕軌車站時刻表 ----------------
+METRO_URL = "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/StationTimeTable/{op}?$format=JSON"
+# 各線車站順序（用來判斷某筆時刻的終點站是在「哪個方向」）
+LINE_ORDER = {
+    "NTALRT": ["雙城", "玫瑰中國城", "台北小城", "耕莘安康院區", "景文科大", "安康", "陽光運動公園", "新和國小", "十四張"],
+    "NTMC": ["大坪林", "十四張", "秀朗橋", "景平", "景安", "中和", "橋和", "中原", "板新", "板橋",
+             "新埔民生", "頭前庄", "幸福", "新北產業園區"],
+}
+# 需要的時刻：鍵 → (營運者, 車站, 方向)。方向 +1 = 往車站順序後面，-1 = 往前面，0 = 不分（起點站）
+METRO_WANT = {
+    "BL23_W": ("TRTC", "南港展覽館", 0),      # 板南線南港展覽館發車（起點站，全部往頂埔／亞東醫院）
+    "K_ANKANG": ("NTALRT", "安康", +1),        # 安康 → 十四張
+    "K_SSZ": ("NTALRT", "十四張", -1),        # 十四張 → 雙城
+    "Y_SZ_F": ("NTMC", "十四張", +1),         # 十四張 → 新北產業園區
+    "Y_SZ_B": ("NTMC", "十四張", -1),         # 十四張 → 大坪林
+    "Y_BQ_F": ("NTMC", "板橋", +1),           # 板橋 → 新北產業園區
+    "Y_BQ_B": ("NTMC", "板橋", -1),           # 板橋 → 大坪林
+}
+
+
+def zh(o):
+    return ((o or {}).get("Zh_tw") or "").replace("臺", "台").replace("站", "")
+
+
+def fetch_metro(token, now):
+    """抓各營運者的車站時刻表，依 METRO_WANT 整理成 tdx/metro.json。
+    任何一項失敗只記錄、不中斷；沒抓到的鍵沿用舊檔，網頁再退回內建時刻。"""
+    path = OUT_DIR / "metro.json"
+    try:
+        out = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        out = {}
+    cache = {}
+    for key, (op, stn, way) in METRO_WANT.items():
+        try:
+            if op not in cache:
+                req = urllib.request.Request(METRO_URL.format(op=op),
+                                             headers={"authorization": f"Bearer {token}", "accept": "application/json"})
+                cache[op] = http_json(req)
+                print(f"捷運 {op}：{len(cache[op])} 筆車站時刻資料")
+            wd, we, dests = set(), set(), set()
+            order = LINE_ORDER.get(op)
+            for e in cache[op]:
+                if zh(e.get("StationName")) != stn:
+                    continue
+                dest = zh(e.get("DestinationStationName"))
+                dests.add(dest)
+                if dest == stn:
+                    continue
+                if way and order:
+                    if dest not in order or stn not in order:
+                        continue
+                    if (order.index(dest) - order.index(stn)) * way <= 0:
+                        continue
+                sd = e.get("ServiceDay") or {}
+                times = [t.get("DepartureTime") or t.get("ArrivalTime") for t in (e.get("Timetables") or [])]
+                times = [t[:5] for t in times if t]
+                if sd.get("Monday") or sd.get("Tuesday") or sd.get("Wednesday"):
+                    wd.update(times)
+                if sd.get("Saturday") or sd.get("Sunday"):
+                    we.update(times)
+            # 00:00–02:59 視為前一營運日的末段，排序時放最後
+            k = lambda t: (int(t[:2]) + (24 if int(t[:2]) < 3 else 0), t[3:])
+            if wd or we:
+                out[key] = {"wd": " ".join(sorted(wd, key=k)), "we": " ".join(sorted(we, key=k))}
+                print(f"捷運 {key}：平日 {len(wd)} 班、假日 {len(we)} 班")
+            else:
+                print(f"捷運 {key}：找不到資料（{stn} 的終點站有：{'、'.join(sorted(dests)) or '無'}）")
+        except Exception as ex:
+            print(f"捷運 {key}：抓取失敗 {ex}", file=sys.stderr)
+    out["updated"] = now.strftime("%Y-%m-%d %H:%M")
+    path.write_text(json.dumps(out, ensure_ascii=False, indent=0), encoding="utf-8")
+
+
 def main():
     cid, secret = os.environ.get("TDX_CLIENT_ID"), os.environ.get("TDX_CLIENT_SECRET")
     if not cid or not secret:
@@ -119,6 +197,15 @@ def main():
         if not data:
             print(f"{date}：TDX 尚無資料，保留舊檔")
             continue
+        full = []
+        for tr in data:
+            st = sorted(tr["StopTimes"], key=lambda s: s["StopSequence"])
+            full.append([str(tr["DailyTrainInfo"]["TrainNo"]).lstrip("0"),
+                         [[str(s.get("StationID")), s.get("ArrivalTime", ""), s.get("DepartureTime", "")] for s in st]])
+        (OUT_DIR / "thsr-full").mkdir(exist_ok=True)
+        (OUT_DIR / "thsr-full" / f"{date}.json").write_text(
+            json.dumps({"date": date, "updated": now.strftime("%Y-%m-%d %H:%M"), "trains": full}, ensure_ascii=False),
+            encoding="utf-8")
         rows = {"S": [], "N": []}
         for tr in data:
             d_, row, dep = to_row(tr)
@@ -130,9 +217,10 @@ def main():
         ok += 1
     # 清除舊檔
     cutoff = (now - timedelta(days=KEEP_DAYS)).strftime("%Y-%m-%d")
-    for f in OUT_DIR.glob("*.json"):
-        if f.stem < cutoff:
+    for f in list(OUT_DIR.glob("*.json")) + list(OUT_DIR.glob("thsr-full/*.json")):
+        if f.stem[:2] == "20" and f.stem < cutoff:
             f.unlink()
+    fetch_metro(token, now)
     if ok == 0:
         sys.exit("沒有任何一天抓取成功")   # 讓 GitHub Actions 標示失敗並寄信通知
 
