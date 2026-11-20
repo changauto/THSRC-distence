@@ -119,6 +119,9 @@ footer{margin-top:14px;font-size:12px;color:var(--sub);line-height:1.7}
   const group = sub => { const c = (sub||"").slice(-1).toUpperCase();
     return "BF".includes(c) ? "rideDirect" : c==="C" ? "rideChung" : "ridePuli"; };
   const GNAME = {rideDirect:"直達", ridePuli:"經埔里", rideChung:"經中台禪寺"};
+  // 子路線標籤：已知的 A–D、F 加註走法；其他（如 G、無字尾）只顯示代號，不猜走法
+  const subLabel = sub => { const c = (sub||"").replace(/^6670/,""); 
+    return /^[ABCDF]$/.test(c) ? `${c} ${GNAME[group(sub)]}` : (c || "6670"); };
 
   // ---- 資料載入 ----
   let TH = null, THDATE = "", THSRC = "", BUS = null, BUSSRC = "", MED = {};
@@ -203,7 +206,7 @@ footer{margin-top:14px;font-size:12px;color:var(--sub);line-height:1.7}
     const cands = busToday(n.wd).filter(b=>b.dep >= ready).slice(0,3);
     if(!cands.length){ $("busList").innerHTML=""; warnB.hidden=false; warnB.textContent="這班高鐵到台中後，今天已沒有接得上的好行往日月潭。"; return; }
     $("busList").innerHTML = cands.map(b=>`<div class="row">
-      <div><span class="t">${fmt(b.dep)}</span>${b.estDep?'<small class="note">估</small>':''}<span class="sub" style="--c:var(--green)">${b.sub.replace(/^6670/,"")} ${GNAME[group(b.sub)]}</span>
+      <div><span class="t">${fmt(b.dep)}</span>${b.estDep?'<small class="note">估</small>':''}<span class="sub" style="--c:var(--green)">${subLabel(b.sub)}</span>
         <div class="note">等 ${Math.round(b.dep-ready)} 分</div></div>
       <div class="r">到日月潭${b.estArr?"（估）":""}<br><b>${fmt(b.arr)}</b></div></div>`).join("");
   }
