@@ -28,6 +28,8 @@ import os
 import sys
 import urllib.parse
 import urllib.request
+import urllib.error
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -51,9 +53,18 @@ NAME_MAP = {"南港": "NAG", "台北": "TPE", "板橋": "BAQ", "桃園": "TAY", 
             "台中": "TAC", "彰化": "CHA", "雲林": "YUL", "嘉義": "CHY", "台南": "TNN", "左營": "ZUY"}
 
 
-def http_json(req):
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read().decode("utf-8"))
+def http_json(req, tries=4):
+    """呼叫 API；遇到 429（呼叫太頻繁）就等 5、10、20 秒後重試。"""
+    for i in range(tries):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or i == tries - 1:
+                raise
+            wait = 5 * 2 ** i
+            print(f"TDX 回應 429（太頻繁），{wait} 秒後重試", file=sys.stderr)
+            time.sleep(wait)
 
 
 def get_token(cid, secret):
@@ -139,10 +150,14 @@ def fetch_metro(token, now):
     for key, (op, stn, way) in METRO_WANT.items():
         try:
             if op not in cache:
+                cache[op] = None                       # 先標記，失敗時同一營運者不再重複呼叫
+                time.sleep(2)                          # 間隔一下，避免短時間連續呼叫被擋
                 req = urllib.request.Request(METRO_URL.format(op=op),
                                              headers={"authorization": f"Bearer {token}", "accept": "application/json"})
                 cache[op] = http_json(req)
                 print(f"捷運 {op}：{len(cache[op])} 筆車站時刻資料")
+            if cache[op] is None:
+                raise RuntimeError(f"{op} 資料未取得")
             wd, we, dests = set(), set(), set()
             order = LINE_ORDER.get(op)
             for e in cache[op]:
